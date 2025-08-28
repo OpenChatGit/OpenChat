@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="de" data-theme="dark">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="tauri-theme" content="none">
+  <meta name="tauri-disable-default-styles" content="true">
+  <title>OpenChat</title>
+
+  <!-- Bootstrap 5 CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+  <!-- Sidebar -->
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-top">
+      <button class="compose-btn" onclick="newConversation()" title="New chat">
+        <i class="fas fa-edit"></i>
+      </button>
+      <button class="sidebar-dock-toggle" id="sidebarDockToggle" title="Hide sidebar">
+        <i class="fas fa-angle-left"></i>
+      </button>
+    </div>
+
+    <div class="sidebar-content">
+      <div class="recent-chats-header">
+        <h3>Recent Chats</h3>
+      </div>
+      <div class="conversation-list" id="conversationList">
+        <div class="empty-state">
+          <p>No conversations yet</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="profile-section">
+        <div class="profile-avatar">
+          <i class="fas fa-user"></i>
+        </div>
+        <div class="profile-info">
+          <div class="profile-name">User</div>
+          <div class="profile-plan">Free</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sidebar Toggle Button -->
+  <button class="sidebar-toggle" id="sidebarToggle">
+    <i class="fas fa-angle-right"></i>
+  </button>
+
+  <!-- OpenChat Title Dropdown -->
+  <div class="main-title-dropdown">
+    <button class="main-title" id="mainTitleBtn">
+      OpenChat
+      <i class="fas fa-chevron-down"></i>
+    </button>
+    <div class="main-title-menu" id="mainTitleMenu">
+      <div class="dropdown-item" id="ollamaMenuItem" onclick="toggleOllamaMenu(event)">
+        <div class="dropdown-item-left">
+          <img src="assets/ollama.svg" alt="Ollama" class="ollama-icon">
+          Ollama
+        </div>
+        <div class="dropdown-item-right">
+          <span id="ollamaStatusDot" class="status-dot offline"></span>
+          <span id="ollamaModelCount">0</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="main-content" id="mainContent">
+    <!-- Chat Container -->
+    <div class="chat-container">
+      <!-- Messages Area -->
+      <div class="messages-area" id="messagesArea">
+      </div>
+
+      <!-- Custom Scrollbar (visual only; JS syncs it with messages scroll) -->
+      <div id="customScrollbar" aria-hidden="true">
+        <div class="thumb"></div>
+      </div>
+
+      <!-- Input Area -->
+      <div class="input-area">
+        <form class="chat-form" id="chatForm">
+          <div class="input-container">
+            <textarea name="message" id="messageInput" placeholder="Message OpenChat" rows="1" required></textarea>
+
+            <div class="input-tools-row">
+              <div class="input-tools">
+                <button type="button" class="tool-btn" title="Add attachment">
+                  <i class="fas fa-plus"></i>
+                </button>
+                <div class="tools-dropdown">
+                  <button type="button" class="tool-btn-with-text" id="toolsBtn" onclick="toggleToolsDropup()">
+                    <i class="fas fa-sliders-h"></i>
+                    <span>Tools</span>
+                  </button>
+                  <div class="tools-dropup-menu" id="toolsDropupMenu">
+                    <div class="dropdown-item" id="websearch-tool" onclick="selectTool('websearch')">
+                      <div class="dropdown-item-left">
+                        <i class="fas fa-search"></i>
+                        Web Search
+                      </div>
+                      <i class="fas fa-check dropdown-item-checkmark"></i>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="input-actions">
+                <button type="button" class="tool-btn" title="Voice input">
+                  <i class="fas fa-microphone"></i>
+                </button>
+                <button type="submit" class="send-btn" id="sendBtn">
+                  <i class="fas fa-arrow-up"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+        </form>
+
+        <div class="input-footer">
+          <small>OpenChat Agents can make mistakes. Check important info.</small>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bootstrap 5 JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+  <!-- Tauri API: do not mock in browser; app must be run via Tauri to access backend -->
+
+  <!-- Markdown rendering libraries -->
+  <script src="https://cdn.jsdelivr.net/npm/markdown-it@13.0.1/dist/markdown-it.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.3/dist/purify.min.js"></script>
+
+  <!-- Custom JavaScript -->
+  <script type="module" src="main.js"></script>
+</body>
+
+</html>

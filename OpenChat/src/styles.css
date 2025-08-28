@@ -1,0 +1,1709 @@
+/* ULTRA AGGRESSIVE TAURI OVERRIDE - DISABLE ALL TAURI UI INTERFERENCE */
+html, html[data-tauri-theme], html[data-tauri-theme="dark"], html[data-tauri-theme="light"] {
+    background: transparent !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-sizing: border-box !important;
+}
+
+/* Reasoning-thinking dropdown in thinking indicator */
+.reasoning-thinking {
+    background: transparent;
+}
+.reasoning-header {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    user-select: none;
+}
+.reasoning-caret {
+    display: inline-flex;
+    align-items: center;
+    color: var(--text-secondary);
+    line-height: 1;
+    font-size: 0.8rem; /* slightly smaller */
+    transform: rotate(0deg); /* closed = right */
+    transition: transform 0.18s ease-in-out;
+}
+.reasoning-caret i,
+.reasoning-caret svg {
+    width: 10px;  /* slightly smaller */
+    height: 10px; /* slightly smaller */
+    display: block;
+}
+
+/* When header is open, rotate chevron to point down */
+.reasoning-header.open .reasoning-caret {
+    transform: rotate(90deg);
+}
+.reasoning-dropdown {
+    display: none;
+    margin-top: 0.35rem;
+    padding: 0; /* plain text, no extra box */
+    border: none; /* remove border */
+    color: #d0d0d6; /* lighter gray for better contrast */
+    white-space: pre-wrap; /* preserve newlines */
+}
+.reasoning-dropdown.open {
+    display: block;
+}
+.reasoning-placeholder {
+    font-size: 0.85rem;
+    opacity: 0.8;
+}
+
+/* Collapsible reasoning block on assistant messages */
+.reasoning-block {
+    margin-top: 0.5rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    overflow: hidden;
+}
+.reasoning-block > summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 0.5rem 0.75rem;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+.reasoning-block[open] > summary {
+    color: var(--text-primary);
+}
+.reasoning-block > summary::-webkit-details-marker { display: none; }
+.reasoning-text {
+    margin: 0;
+    padding: 0.75rem;
+    background: transparent;
+    color: var(--text-secondary);
+    white-space: pre-wrap;
+}
+
+/* New dark gray shimmer Thinking card */
+.thinking-card {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.6rem 0.9rem;
+    border-radius: 14px;
+    background-color: #2b2b2b; /* dark gray pill */
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+    overflow: hidden;
+}
+
+.thinking-label {
+    color: #d6d6db;
+    font-size: 0.9rem;
+    letter-spacing: 0.01em;
+}
+
+/* Shimmer sweep from left to right */
+.thinking-card::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -160%;
+    height: 100%;
+    width: 160%;
+    background: linear-gradient(
+        90deg,
+        rgba(255, 255, 255, 0) 0%,
+        rgba(255, 255, 255, 0.06) 35%,
+        rgba(255, 255, 255, 0.14) 50%,
+        rgba(255, 255, 255, 0.06) 65%,
+        rgba(255, 255, 255, 0) 100%
+    );
+    animation: thinkingShimmer 1.6s ease-in-out infinite;
+    pointer-events: none;
+}
+
+@keyframes thinkingShimmer {
+    0% { left: -160%; }
+    100% { left: 100%; }
+}
+
+/* Plain text shimmer for thinking indicator */
+.thinking-text {
+    position: relative;
+    display: inline-block;
+    font-size: 0.92rem;
+    color: #bfc0c7; /* base slightly darker gray */
+    background: linear-gradient(
+        90deg,
+        #a9abb3 0%,
+        #e6e7eb 20%,
+        #ffffff 35%,
+        #e6e7eb 50%,
+        #a9abb3 70%
+    );
+    background-size: 300% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent; /* reveal gradient through text */
+    animation: thinkingTextShimmer 1.6s ease-in-out infinite;
+}
+
+@keyframes thinkingTextShimmer {
+    0% { background-position: -150% 0; }
+    100% { background-position: 150% 0; }
+}
+
+body, body[data-tauri-theme], body[data-tauri-theme="dark"], body[data-tauri-theme="light"] {
+    background: transparent !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-sizing: border-box !important;
+    position: static !important;
+    display: block !important;
+}
+
+/* Force override ANY Tauri injected styles */
+#root, .tauri-app, [data-tauri-drag-region], [data-tauri-theme] {
+    background: transparent !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    position: static !important;
+    display: block !important;
+}
+
+/* Disable ALL Tauri default CSS */
+* {
+    -webkit-app-region: no-drag !important;
+}
+
+/* FORCE OUR LAYOUT - MAXIMUM PRIORITY */
+body .main-content .chat-container.input-centered {
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    align-items: center !important;
+    padding: 2rem !important;
+    position: relative !important;
+    flex: 1 !important;
+    max-width: 768px !important;
+    margin: 0 auto !important;
+    width: 100% !important;
+    height: 100vh !important;
+    min-height: 100vh !important;
+}
+
+body .main-content .chat-container.input-centered .input-area.centered {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 2rem !important;
+    padding: 0 1rem !important;
+    margin: 0 auto !important;
+    background-color: transparent !important;
+    max-width: 768px !important;
+    width: 100% !important;
+    position: static !important;
+    flex: none !important;
+    transform: translateY(0) !important;
+}
+
+/* FORCE THE WELCOME MESSAGE POSITIONING */
+body .main-content .chat-container.input-centered .input-area.centered::before {
+    content: "How can I help you today?" !important;
+    display: block !important;
+    font-size: 2rem !important;
+    font-weight: 400 !important;
+    color: var(--text-primary) !important;
+    text-align: center !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    order: -1 !important;
+    width: 100% !important;
+}
+
+/* FORCE THE INPUT CONTAINER TO BE VISIBLE AND STYLED */
+body .main-content .chat-container.input-centered .input-area.centered .chat-form {
+    width: 100% !important;
+    margin: 0 !important;
+    display: block !important;
+}
+
+body .main-content .chat-container.input-centered .input-area.centered .input-container {
+    position: relative !important;
+    max-width: 100% !important;
+    background-color: var(--input-bg) !important;
+    border: none !important;
+    border-radius: 24px !important;
+    padding: 0.75rem !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.5rem !important;
+    box-shadow: var(--shadow-lg) !important;
+    width: 100% !important;
+    min-width: 0 !important;
+}
+
+/* NUCLEAR OPTION - OVERRIDE EVERYTHING */
+.chat-container.input-centered {
+    position: relative !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    transform: none !important;
+    margin: 0 auto !important;
+    padding: 2rem !important;
+}
+
+.input-area.centered {
+    position: static !important;
+    top: auto !important;
+    left: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    transform: none !important;
+}
+
+
+
+/* CSS Variables for Theme Management - Default Dark Theme like ChatGPT */
+:root {
+    --bg-primary: #212121;
+    --bg-secondary: #2f2f2f;
+    --bg-tertiary: #404040;
+    --text-primary: #ececec;
+    --text-secondary: #8e8ea0;
+    --border-color: #565869;
+    --accent-color: #ab68ff;
+    --accent-hover: #9c5cf2;
+    --sidebar-width: 260px;
+    --sidebar-bg: #171717;
+    --message-user-bg: #2f2f2f;
+    --message-ai-bg: #212121;
+    --code-bg: #1e1e1e;
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    --shadow-lg: 0 4px 6px rgba(0, 0, 0, 0.3);
+    --input-bg: #2f2f2f;
+    --input-border: #565869;
+}
+
+/* Custom scrollbar for messages area only (non-intrusive) */
+.messages-area {
+    /* Firefox custom scrollbar */
+    scrollbar-width: thin; /* auto | thin | none */
+    scrollbar-color: rgba(185, 185, 195, 0.7) transparent; /* thumb track - light gray */
+    /* Hide native scrollbar if we use the overlay custom bar */
+    scrollbar-width: none; /* Firefox hide */
+}
+
+/* WebKit-based browsers (Chrome, Edge, Safari) */
+.messages-area::-webkit-scrollbar {
+    width: 0; /* hide native */
+    height: 0;
+}
+
+.messages-area::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.messages-area::-webkit-scrollbar-thumb {
+    background-color: transparent; /* no native thumb */
+}
+
+.messages-area::-webkit-scrollbar-thumb:hover { background-color: transparent; }
+
+/* Overlay custom scrollbar pinned to the right of chat container */
+#customScrollbar {
+    position: absolute;
+    right: 0; /* flush to window edge */
+    width: 10px;
+    /* height and top are computed in JS to match messages area */
+    background: transparent;
+    z-index: 20;
+    display: none; /* shown when overflow exists */
+}
+
+#customScrollbar .thumb {
+    width: 100%;
+    border-radius: 6px;
+    background: rgba(190, 190, 200, 0.75); /* light gray */
+    transition: background 0.15s ease;
+}
+
+#customScrollbar:hover .thumb,
+#customScrollbar.dragging .thumb {
+    background: rgba(210, 210, 220, 0.95); /* slightly brighter on hover/drag */
+}
+
+/* Light Theme */
+[data-theme="light"] {
+    --bg-primary: #ffffff;
+    --bg-secondary: #f7f7f8;
+    --bg-tertiary: #ececf1;
+    --text-primary: #2d3748;
+    --text-secondary: #6b7280;
+    --border-color: #e5e7eb;
+    --accent-color: #10a37f;
+    --accent-hover: #0d9268;
+    --sidebar-bg: #f7f7f8;
+    --message-user-bg: #f7f7f8;
+    --message-ai-bg: #ffffff;
+    --code-bg: #f8f9fa;
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 4px 6px rgba(0, 0, 0, 0.1);
+    --input-bg: #f4f4f4;
+    --input-border: #d1d5db;
+}
+
+/* Base Styles - Force override Tauri defaults */
+* {
+    box-sizing: border-box !important;
+}
+
+/* Only reset margin/padding on specific elements */
+html, body, #root, .tauri-app {
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+/* Make all FontAwesome icons white by default */
+i[class*="fa-"], .fas, .far, .fab, .fal {
+    color: white !important;
+}
+
+/* Custom tooltips using data-tooltip attribute */
+.custom-tooltip {
+    position: relative;
+}
+
+.custom-tooltip:hover::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: var(--bg-secondary);
+    color: white;
+    padding: 0.5rem 0.75rem;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    white-space: nowrap;
+    z-index: 1000;
+    margin-top: 0.5rem;
+    box-shadow: var(--shadow-lg);
+    pointer-events: none;
+    opacity: 0;
+    animation: tooltipFadeIn 0.2s ease forwards;
+}
+
+.custom-tooltip:hover::before {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-bottom: 4px solid var(--bg-secondary);
+    z-index: 1000;
+    margin-top: 0.1rem;
+    pointer-events: none;
+    opacity: 0;
+    animation: tooltipFadeIn 0.2s ease forwards;
+}
+
+@keyframes tooltipFadeIn {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(2px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
+}
+
+/* Completely disable any remaining title attributes */
+[title] {
+    display: none !important;
+}
+
+/* Force disable native tooltips on all elements */
+* {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+
+/* Re-enable text selection for input elements */
+input, textarea, [contenteditable] {
+    -webkit-user-select: text;
+    -moz-user-select: text;
+    -ms-user-select: text;
+    user-select: text;
+}
+
+/* All tooltips show below by default - no special positioning needed */
+
+/* AI Thinking Animation */
+.thinking-animation {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.75rem 1rem;
+    background-color: transparent;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.thinking-dots {
+    display: flex;
+    gap: 0.2rem;
+    margin-left: 0.5rem;
+}
+
+.thinking-dot {
+    width: 4px;
+    height: 4px;
+    background-color: var(--text-secondary);
+    border-radius: 50%;
+    animation: thinkingBounce 1.4s infinite ease-in-out;
+}
+
+.thinking-dot:nth-child(1) {
+    animation-delay: -0.32s;
+}
+
+.thinking-dot:nth-child(2) {
+    animation-delay: -0.16s;
+}
+
+.thinking-dot:nth-child(3) {
+    animation-delay: 0s;
+}
+
+@keyframes thinkingBounce {
+    0%, 80%, 100% {
+        transform: translateY(0);
+        opacity: 0.5;
+    }
+    40% {
+        transform: translateY(-8px);
+        opacity: 1;
+    }
+}
+
+/* Typing Cursor Animation */
+.typing-cursor {
+    color: var(--text-primary);
+    animation: typingBlink 1s infinite;
+    font-weight: normal;
+    margin-left: 1px;
+}
+
+@keyframes typingBlink {
+    0%, 50% {
+        opacity: 1;
+    }
+    51%, 100% {
+        opacity: 0;
+    }
+}
+
+html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif !important;
+    background-color: var(--bg-primary) !important;
+    color: var(--text-primary) !important;
+    height: 100vh !important;
+    overflow: hidden !important;
+    transition: background-color 0.3s ease, color 0.3s ease !important;
+}
+
+/* Sidebar Styles */
+.sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: var(--sidebar-width);
+    height: 100vh;
+    background-color: var(--sidebar-bg);
+    display: flex;
+    flex-direction: column;
+    transform: translateX(0);
+    transition: transform 0.3s ease;
+    z-index: 1000;
+    box-shadow: var(--shadow-lg);
+}
+
+.sidebar.collapsed {
+    transform: translateX(-100%);
+}
+
+.sidebar-top {
+    padding: 0.75rem 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.compose-btn, .sidebar-dock-toggle {
+    background: none;
+    border: none;
+    color: white !important;
+    padding: 0.5rem;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    width: 40px;
+    height: 40px;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+}
+
+.compose-btn:hover, .sidebar-dock-toggle:hover {
+    background-color: var(--bg-tertiary);
+    color: white !important;
+}
+
+/* Main Title Dropdown */
+.main-title-dropdown {
+    position: fixed;
+    top: 0.6rem;
+    left: calc(var(--sidebar-width) + 2rem);
+    z-index: 100;
+    transition: left 0.3s ease;
+}
+
+.sidebar.collapsed ~ .main-title-dropdown {
+    left: 4rem;
+}
+
+.main-title {
+    background: none;
+    border: none;
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 1.2rem;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    height: 40px;
+    gap: 0.5rem;
+    cursor: pointer;
+    padding: 0.5rem;
+    border-radius: 6px;
+    transition: background-color 0.2s ease;
+}
+
+.main-title:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.main-title i {
+    font-size: 0.8rem;
+    transition: transform 0.2s ease;
+}
+
+.main-title-dropdown.open .main-title i {
+    transform: rotate(180deg);
+}
+
+.main-title-menu {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    box-shadow: var(--shadow-lg);
+    min-width: 200px;
+    z-index: 1000;
+    display: none;
+    padding: 0.25rem;
+    margin-top: 0.5rem;
+}
+
+.main-title-menu.show {
+    display: block;
+}
+
+.main-title-menu .dropdown-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    color: white;
+    text-decoration: none;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    border-radius: 8px;
+    margin: 0;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.dropdown-item-left {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.dropdown-item-right {
+    color: white;
+    background: none;
+    padding: 0;
+    border-radius: 0;
+    width: 16px;
+    height: 16px;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.main-title-menu .dropdown-item:hover {
+    background-color: var(--bg-tertiary);
+}
+
+.main-title-menu .dropdown-item i {
+    font-size: 0.8rem;
+    width: 14px;
+}
+
+/* Ensure the checkmark icon is crisp and centered */
+.dropdown-item-right i {
+    font-size: 0.85rem;
+    line-height: 1;
+}
+
+/* Give ONLY the Ollama main button (status + count) a pill background */
+.main-title-menu #ollamaMenuItem > .dropdown-item-right {
+    background-color: rgba(255, 255, 255, 0.14);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    padding: 0.125rem 0.5rem;
+    border-radius: 999px;
+    min-width: 40px;
+    min-height: 24px;
+    gap: 0.4rem;
+    flex: 0 0 auto; /* don't shrink */
+    white-space: nowrap; /* keep dot and number together */
+    align-items: center;
+    justify-content: center;
+}
+
+/* Make the count a bit smaller and bold for readability */
+.main-title-menu #ollamaMenuItem > .dropdown-item-right #ollamaModelCount {
+    font-size: 0.8rem;
+    font-weight: 600;
+    line-height: 1;
+}
+
+/* Ensure the status dot is centered inside the pill */
+.main-title-menu #ollamaMenuItem > .dropdown-item-right #ollamaStatusDot.status-dot {
+    display: inline-block;
+    width: 8px !important;
+    height: 8px !important;
+    min-width: 8px;
+    min-height: 8px;
+    border-radius: 50% !important;
+    flex: 0 0 8px;
+    align-self: center;
+    margin: 0;
+}
+
+/* Allow submenu positioning relative to items */
+.main-title-menu .dropdown-item {
+    position: relative;
+}
+
+/* Right-side submenu for Ollama models */
+.main-title-submenu {
+    position: absolute;
+    top: 50%;
+    left: 100%;
+    transform: translateY(-50%);
+    margin-left: 0.5rem;
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    box-shadow: var(--shadow-lg);
+    min-width: 220px;
+    z-index: 1100;
+    display: none;
+    padding: 0.25rem;
+}
+
+.main-title-submenu.show {
+    display: block;
+}
+
+.ollama-icon {
+    width: 16px;
+    height: 16px;
+    filter: brightness(0) invert(1);
+}
+
+/* Connection status dot with glow */
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.status-dot.online {
+    background-color: #22c55e; /* green */
+    box-shadow: 0 0 4px rgba(34, 197, 94, 0.9), 0 0 8px rgba(34, 197, 94, 0.6);
+    animation: pulseGlowGreen 1.6s ease-in-out infinite;
+}
+
+.status-dot.offline {
+    background-color: #ef4444; /* red */
+    box-shadow: 0 0 4px rgba(239, 68, 68, 0.9), 0 0 8px rgba(239, 68, 68, 0.6);
+    animation: pulseGlowRed 1.6s ease-in-out infinite;
+}
+
+@keyframes pulseGlowGreen {
+    0%, 100% { box-shadow: 0 0 4px rgba(34, 197, 94, 0.7), 0 0 8px rgba(34, 197, 94, 0.4); }
+    50% { box-shadow: 0 0 6px rgba(34, 197, 94, 1), 0 0 12px rgba(34, 197, 94, 0.8); }
+}
+
+@keyframes pulseGlowRed {
+    0%, 100% { box-shadow: 0 0 4px rgba(239, 68, 68, 0.7), 0 0 8px rgba(239, 68, 68, 0.4); }
+    50% { box-shadow: 0 0 6px rgba(239, 68, 68, 1), 0 0 12px rgba(239, 68, 68, 0.8); }
+}
+
+.sidebar-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0;
+}
+
+.recent-chats-header {
+    padding: 1rem 0.75rem 0.5rem 0.75rem;
+    margin-bottom: 0.5rem;
+}
+
+.recent-chats-header h3 {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    font-weight: 500;
+    margin: 0;
+    letter-spacing: 0.025em;
+}
+
+.conversation-list {
+    padding: 0 0.75rem 1rem 0.75rem;
+}
+
+.conversation-item {
+    padding: 0.5rem 0.75rem;
+    margin-bottom: 0.125rem;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: relative;
+    min-height: 40px;
+    background-color: transparent;
+}
+
+.conversation-item:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.conversation-item.active {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: white;
+}
+
+.conversation-title {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    min-width: 0;
+    padding-right: 0.5rem;
+}
+
+.conversation-title-text {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 0.8rem;
+    line-height: 1.2;
+    font-weight: 400;
+    width: 100%;
+}
+
+.conversation-title-input {
+    background-color: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: white;
+    font-size: 0.8rem;
+    line-height: 1.2;
+    font-weight: 400;
+    padding: 0.25rem 0.5rem;
+    width: 100%;
+    outline: none;
+}
+
+.conversation-title-input:focus {
+    border-color: white;
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.2);
+}
+
+.conversation-actions {
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    position: relative;
+}
+
+.conversation-item:hover .conversation-actions {
+    opacity: 1;
+}
+
+.conversation-dropdown {
+    background: none;
+    border: none;
+    color: white !important;
+    padding: 0.25rem;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    font-size: 0.75rem;
+}
+
+.conversation-dropdown:hover {
+    background-color: var(--bg-tertiary);
+}
+
+.conversation-dropdown-menu {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    box-shadow: var(--shadow-lg);
+    min-width: 120px;
+    z-index: 1000;
+    display: none;
+    padding: 0.25rem;
+}
+
+.conversation-dropdown-menu.show {
+    display: block;
+}
+
+.dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    color: white;
+    text-decoration: none;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    border-radius: 8px;
+    margin: 0;
+}
+
+.dropdown-item:hover {
+    background-color: var(--bg-tertiary);
+    color: white;
+}
+
+.dropdown-item.delete {
+    transition: all 0.3s ease;
+}
+
+.dropdown-item.delete:hover {
+    background-color: #ef4444;
+    color: white;
+}
+
+.dropdown-item.delete.confirming {
+    background-color: #dc2626;
+    color: white;
+    position: relative;
+    overflow: hidden;
+    animation: confirmPulse 0.3s ease, confirmGlow 2s ease-in-out infinite;
+    box-shadow: 0 0 10px rgba(220, 38, 38, 0.5);
+    transition: all 0.3s ease;
+}
+
+.dropdown-item.delete.confirming:hover {
+    background-color: #b91c1c;
+}
+
+.dropdown-item.delete.confirming::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(255, 255, 255, 0.2),
+        rgba(255, 255, 255, 0.4),
+        rgba(255, 255, 255, 0.2),
+        transparent
+    );
+    animation: confirmShine 3s ease-in-out infinite;
+    pointer-events: none;
+    opacity: 0;
+    animation-delay: 0.3s;
+}
+
+@keyframes confirmPulse {
+    0% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.02);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
+@keyframes confirmShine {
+    0% {
+        left: -100%;
+        opacity: 0;
+    }
+    10% {
+        opacity: 1;
+    }
+    90% {
+        opacity: 1;
+    }
+    100% {
+        left: 100%;
+        opacity: 0;
+    }
+}
+
+@keyframes confirmGlow {
+    0%, 100% {
+        box-shadow: 0 0 10px rgba(220, 38, 38, 0.5);
+    }
+    50% {
+        box-shadow: 0 0 15px rgba(220, 38, 38, 0.7), 0 0 25px rgba(220, 38, 38, 0.3);
+    }
+}
+
+.dropdown-item i {
+    font-size: 0.7rem;
+    width: 12px;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 2rem 1rem;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+.sidebar-footer {
+    padding: 1rem;
+}
+
+.profile-section {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    background-color: transparent;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.profile-section:hover {
+    background-color: var(--bg-tertiary);
+}
+
+.profile-avatar {
+    width: 32px;
+    height: 32px;
+    background-color: var(--accent-color);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 0.875rem;
+}
+
+.profile-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.profile-name {
+    font-weight: 500;
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    line-height: 1.2;
+}
+
+.profile-plan {
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    line-height: 1.2;
+}
+
+/* Sidebar Toggle Button */
+.sidebar-toggle {
+    position: fixed;
+    top: 0.75rem;
+    left: 1rem;
+    z-index: 1001;
+    background-color: var(--bg-secondary);
+    border: none;
+    border-radius: 8px;
+    padding: 0.5rem;
+    cursor: pointer;
+    box-shadow: var(--shadow);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    display: none;
+    color: var(--text-secondary);
+    width: 40px;
+    height: 40px;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transform: translateX(-100%);
+}
+
+.sidebar-toggle:hover {
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+    transform: translateX(0) scale(1.05);
+}
+
+/* Show toggle button when sidebar is collapsed */
+.sidebar.collapsed ~ .sidebar-toggle {
+    display: flex;
+    opacity: 1;
+    transform: translateX(0);
+}
+
+/* Main Content */
+.main-content {
+    margin-left: var(--sidebar-width) !important;
+    height: 100vh !important;
+    transition: margin-left 0.3s ease !important;
+    display: flex !important;
+    flex-direction: column !important;
+    position: relative !important;
+}
+
+.main-content.sidebar-collapsed {
+    margin-left: 0 !important;
+}
+
+
+
+/* Chat Container - Force override */
+.chat-container {
+    flex: 1 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    max-width: 768px !important;
+    margin: 0 auto !important;
+    width: 100% !important;
+    height: 100vh !important;
+    position: relative !important;
+}
+
+/* Chat Container when input is centered - Force override */
+.chat-container.input-centered {
+    justify-content: center !important;
+    align-items: center !important;
+    padding: 2rem !important;
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+/* Messages Area - Force override */
+.messages-area {
+    flex: 1 !important;
+    overflow-y: auto !important;
+    padding: 1rem !important;
+    scroll-behavior: smooth !important;
+    max-width: 100% !important;
+}
+
+/* Messages Area when input is centered - hide it completely - Force override */
+body .main-content .chat-container.input-centered .messages-area.with-centered-input {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    height: 0 !important;
+    overflow: hidden !important;
+    position: absolute !important;
+    top: -9999px !important;
+}
+
+.welcome-message {
+    text-align: center;
+    padding: 2rem 1rem;
+    color: var(--text-primary);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    z-index: 1;
+}
+
+/* Welcome message when input is centered */
+.messages-area.with-centered-input .welcome-message {
+    padding: 1rem;
+    margin-bottom: 2rem;
+}
+
+.welcome-message h2 {
+    margin-bottom: 1rem;
+    color: var(--text-primary);
+    font-weight: 400;
+    font-size: 2rem;
+}
+
+.message {
+    margin-bottom: 1.5rem;
+    max-width: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.message.user {
+    align-items: flex-end;
+}
+
+.message.assistant {
+    align-items: flex-start;
+}
+
+/* Remove message avatars - they are no longer used */
+
+.message-content {
+    line-height: 1.6;
+    max-width: 70%;
+    word-wrap: break-word;
+}
+
+.message.user .message-content {
+    background-color: #404040;
+    color: white;
+    padding: 0.75rem 1rem;
+    border-radius: 18px 18px 4px 18px;
+    margin-left: auto;
+}
+
+.message.assistant .message-content {
+    background-color: transparent;
+    color: var(--text-primary);
+    padding: 0;
+    margin-right: auto;
+}
+
+.message-content p {
+    margin-bottom: 0.75rem;
+    white-space: pre-wrap;
+}
+
+.message-content p:last-child {
+    margin-bottom: 0;
+}
+
+.message.assistant .message-content pre {
+    background-color: var(--code-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1rem;
+    overflow-x: auto;
+    margin: 0.75rem 0;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 0.875rem;
+}
+
+.message.user .message-content pre {
+    background-color: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    padding: 1rem;
+    overflow-x: auto;
+    margin: 0.75rem 0;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 0.875rem;
+    color: white;
+}
+
+.message.assistant .message-content code {
+    background-color: var(--code-bg);
+    padding: 0.125rem 0.25rem;
+    border-radius: 4px;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 0.875rem;
+}
+
+.message.user .message-content code {
+    background-color: rgba(255, 255, 255, 0.1);
+    padding: 0.125rem 0.25rem;
+    border-radius: 4px;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 0.875rem;
+    color: white;
+}
+
+/* Input Area - Force override */
+.input-area {
+    padding: 1rem 1rem 2rem 1rem !important;
+    background-color: var(--bg-primary) !important;
+    position: relative !important;
+    transition: all 0.3s ease !important;
+}
+
+/* Input Area when no conversation is active (centered) - Force override */
+.input-area.centered {
+    flex: none !important;
+    background-color: transparent !important;
+    max-width: 768px !important;
+    width: 100% !important;
+    margin: 0 !important;
+    position: relative !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    gap: 2rem !important;
+    /* Keep original padding for the input container inside */
+    padding: 0 1rem !important;
+}
+
+/* Welcome message above centered input - Force override */
+.input-area.centered::before {
+    content: "How can I help you today?" !important;
+    display: block !important;
+    font-size: 2rem !important;
+    font-weight: 400 !important;
+    color: var(--text-primary) !important;
+    text-align: center !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    order: -1 !important;
+}
+
+.chat-form {
+    margin-bottom: 0.5rem;
+}
+
+/* Chat form when input is centered - preserve original styling */
+.input-area.centered .chat-form {
+    width: 100% !important;
+    margin-bottom: 0.5rem !important;
+    display: block !important;
+}
+
+.input-container {
+    position: relative;
+    max-width: 100%;
+    background-color: var(--input-bg);
+    border: none;
+    border-radius: 24px;
+    padding: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+/* Input container when centered - preserve original styling + shadow */
+.input-area.centered .input-container {
+    box-shadow: var(--shadow-lg) !important;
+    /* Preserve all original input-container styles */
+    position: relative !important;
+    max-width: 100% !important;
+    background-color: var(--input-bg) !important;
+    border: none !important;
+    border-radius: 24px !important;
+    padding: 0.75rem !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.5rem !important;
+}
+
+/* Ultra high priority for centered input area */
+body .chat-container.input-centered .input-area.centered {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 2rem !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background-color: transparent !important;
+    max-width: 600px !important;
+    width: 100% !important;
+    position: relative !important;
+    flex: none !important;
+}
+
+#messageInput {
+    width: 100%;
+    min-height: 24px;
+    max-height: 65vh;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--text-primary);
+    font-size: 1rem;
+    line-height: 1.5;
+    resize: none;
+    overflow-y: auto;
+    outline: none;
+    margin-bottom: 0.5rem;
+}
+
+#messageInput::placeholder {
+    color: var(--text-secondary);
+}
+
+.input-tools-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.input-tools {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.input-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.tool-btn {
+    background: none;
+    border: none;
+    color: white !important;
+    padding: 0.25rem;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    font-size: 0.875rem;
+}
+
+.tool-btn:hover {
+    background-color: var(--bg-tertiary);
+    color: white !important;
+}
+
+.tool-btn-with-text {
+    background: none;
+    border: none;
+    color: white !important;
+    padding: 0.25rem 0.5rem;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    height: 28px;
+    font-size: 0.875rem;
+}
+
+.tool-btn-with-text:hover {
+    background-color: var(--bg-tertiary);
+    color: white !important;
+}
+
+
+
+.tool-btn-with-text i {
+    font-size: 0.875rem;
+}
+
+.tool-btn-with-text span {
+    font-size: 0.8rem;
+    font-weight: 400;
+}
+
+.tools-dropdown {
+    position: relative;
+}
+
+.tools-dropup-menu {
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    box-shadow: var(--shadow-lg);
+    min-width: 180px;
+    z-index: 1000;
+    display: none;
+    padding: 0.375rem;
+    margin-bottom: 0.5rem;
+}
+
+.tools-dropup-menu.show {
+    display: block;
+}
+
+.tools-dropup-menu .dropdown-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    color: white;
+    text-decoration: none;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    border-radius: 6px;
+    margin: 0;
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 36px;
+}
+
+.tools-dropup-menu .dropdown-item:hover {
+    background-color: var(--bg-tertiary);
+}
+
+.tools-dropup-menu .dropdown-item.active {
+    background-color: white !important;
+    color: var(--bg-primary) !important;
+}
+
+.tools-dropup-menu .dropdown-item.active:hover {
+    background-color: #f0f0f0 !important;
+    color: var(--bg-primary) !important;
+}
+
+.tools-dropup-menu .dropdown-item.active .dropdown-item-left,
+.tools-dropup-menu .dropdown-item.active .dropdown-item-left i {
+    color: var(--bg-primary) !important;
+}
+
+.dropdown-item-left {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.dropdown-item-left i {
+    font-size: 0.85rem;
+    width: 16px;
+    flex-shrink: 0;
+}
+
+.dropdown-item-checkmark {
+    font-size: 0.8rem;
+    color: #4ade80;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.dropdown-item.active .dropdown-item-checkmark {
+    opacity: 1;
+    color: #16a34a !important;
+}
+
+.send-btn {
+    background-color: #565869;
+    border: none;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white !important;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    opacity: 0.5;
+}
+
+.send-btn:hover:not(:disabled) {
+    background-color: white;
+    color: var(--bg-primary) !important;
+}
+
+.send-btn:disabled {
+    background-color: #565869;
+    cursor: not-allowed;
+    opacity: 0.5;
+    color: white !important;
+}
+
+.send-btn.active {
+    background-color: white;
+    color: var(--bg-primary) !important;
+    opacity: 1;
+}
+
+.send-btn.active:hover {
+    background-color: #f0f0f0;
+    color: var(--bg-primary) !important;
+}
+
+.send-btn.active i {
+    color: #000 !important;
+}
+
+.send-btn.active:hover i {
+    color: #000 !important;
+}
+
+.input-footer {
+    text-align: center;
+    margin-top: 1rem;
+    padding-bottom: 0.25rem;
+    position: absolute;
+    bottom: 0.5rem;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100%;
+    opacity: 1;
+    transition: opacity 0.3s ease;
+}
+
+/* Hide footer when input is centered */
+.input-area.centered .input-footer {
+    opacity: 0 !important;
+    pointer-events: none !important;
+    display: none !important;
+}
+
+.input-footer small {
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .sidebar {
+        width: 100%;
+        transform: translateX(-100%);
+    }
+    
+    .sidebar.open {
+        transform: translateX(0);
+    }
+    
+    .sidebar-toggle {
+        display: block;
+    }
+    
+    .main-content {
+        margin-left: 0;
+    }
+    
+    .main-title {
+        left: 4rem;
+        top: 0.6rem;
+    }
+    
+    .chat-container {
+        max-width: 100%;
+        padding: 0;
+    }
+    
+    .messages-area {
+        padding: 0.5rem;
+    }
+    
+    .input-area {
+        padding: 0.75rem;
+    }
+    
+    .message.user {
+        margin: 0 -0.5rem 1.5rem -0.5rem;
+        padding: 0.75rem 0.5rem;
+    }
+}
+
+/* Scrollbar Styling */
+.messages-area::-webkit-scrollbar,
+.sidebar-content::-webkit-scrollbar,
+#messageInput::-webkit-scrollbar {
+    width: 6px;
+}
+
+.messages-area::-webkit-scrollbar-track,
+.sidebar-content::-webkit-scrollbar-track,
+#messageInput::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.messages-area::-webkit-scrollbar-thumb,
+.sidebar-content::-webkit-scrollbar-thumb,
+#messageInput::-webkit-scrollbar-thumb {
+    background-color: var(--border-color);
+    border-radius: 3px;
+}
+
+.messages-area::-webkit-scrollbar-thumb:hover,
+.sidebar-content::-webkit-scrollbar-thumb:hover,
+#messageInput::-webkit-scrollbar-thumb:hover {
+    background-color: var(--text-secondary);
+}
+
+/* Animation for smooth transitions */
+.sidebar,
+.main-content,
+.conversation-item,
+#messageInput {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Focus states for accessibility */
+.conversation-item:focus,
+.sidebar-toggle:focus,
+.send-btn:focus {
+    outline: 2px solid var(--accent-color);
+    outline-offset: 2px;
+}

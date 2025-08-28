@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="de" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChatGPT Interface</title>
+    
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <!-- Sidebar -->
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-top">
+            <button class="compose-btn" onclick="window.location.href='{{ url_for('new_conversation') }}'" title="New chat">
+                <i class="fas fa-edit"></i>
+            </button>
+            <button class="sidebar-dock-toggle" id="sidebarDockToggle" title="Hide sidebar">
+                <i class="fas fa-angle-left"></i>
+            </button>
+        </div>
+        
+        <div class="sidebar-content">
+            <div class="conversation-list">
+                {% if conversations %}
+                    {% for conversation in conversations %}
+                    <div class="conversation-item {% if current_conversation and current_conversation.id == conversation.id %}active{% endif %}"
+                         onclick="window.location.href='{{ url_for('index', conversation_id=conversation.id) }}'">
+                        <div class="conversation-title">
+                            <i class="fas fa-message"></i>
+                            <span>{{ conversation.title }}</span>
+                        </div>
+                        <div class="conversation-actions">
+                            <button class="btn-delete" onclick="event.stopPropagation(); if(confirm('Delete this conversation?')) window.location.href='{{ url_for('delete_conversation', conversation_id=conversation.id) }}'">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="empty-state">
+                        <p>Noch keine Unterhaltungen</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="sidebar-footer">
+            <div class="profile-section">
+                <div class="profile-avatar">
+                    <i class="fas fa-user"></i>
+                </div>
+                <div class="profile-info">
+                    <div class="profile-name">User</div>
+                    <div class="profile-plan">Free</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Sidebar Toggle Button -->
+    <button class="sidebar-toggle" id="sidebarToggle">
+        <i class="fas fa-angle-right"></i>
+    </button>
+    
+    <!-- ChatGPT Title -->
+    <div class="main-title">ChatGPT</div>
+
+    <!-- Main Content -->
+    <div class="main-content" id="mainContent">
+        <!-- Chat Container -->
+        <div class="chat-container">
+
+            
+            <!-- Messages Area -->
+            <div class="messages-area" id="messagesArea">
+                {% if current_conversation and current_conversation.messages %}
+                    {% for message in current_conversation.messages %}
+                    <div class="message {{ message.role }}">
+                        <div class="message-avatar">
+                            {% if message.role == 'user' %}
+                                <i class="fas fa-user"></i>
+                            {% else %}
+                                <i class="fas fa-robot"></i>
+                            {% endif %}
+                        </div>
+                        <div class="message-content">
+                            {% if '```' in message.content %}
+                                {% set parts = message.content.split('```') %}
+                                {% for part in parts %}
+                                    {% if loop.index % 2 == 1 %}
+                                        <p>{{ part | safe }}</p>
+                                    {% else %}
+                                        <pre><code>{{ part }}</code></pre>
+                                    {% endif %}
+                                {% endfor %}
+                            {% else %}
+                                <p>{{ message.content | nl2br | safe }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="welcome-message">
+                        <h2>How can I help you today?</h2>
+                    </div>
+                {% endif %}
+            </div>
+            
+            <!-- Input Area -->
+            <div class="input-area">
+                <form method="POST" action="{{ url_for('send_message') }}" class="chat-form">
+                    {% if current_conversation %}
+                        <input type="hidden" name="conversation_id" value="{{ current_conversation.id }}">
+                    {% endif %}
+                    
+                    <div class="input-container">
+                        <textarea name="message" 
+                                  id="messageInput" 
+                                  placeholder="Message ChatGPT" 
+                                  rows="1" 
+                                  required></textarea>
+                        
+                        <div class="input-tools-row">
+                            <div class="input-tools">
+                                <button type="button" class="tool-btn" title="Add attachment">
+                                    <i class="fas fa-plus"></i>
+                                </button>
+                                <button type="button" class="tool-btn" title="Tools">
+                                    <i class="fas fa-wrench"></i>
+                                </button>
+                            </div>
+                            
+                            <div class="input-actions">
+                                <button type="button" class="tool-btn" title="Voice input">
+                                    <i class="fas fa-microphone"></i>
+                                </button>
+                                <button type="submit" class="send-btn" id="sendBtn">
+                                    <i class="fas fa-arrow-up"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+                
+                <div class="input-footer">
+                    <small>ChatGPT can make mistakes. Check important info.</small>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Flash Messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="flash-messages">
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+    
+    <!-- Bootstrap 5 JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Custom JavaScript -->
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

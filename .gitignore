@@ -1,0 +1,52 @@
+# Global ignores for this repo
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Local state
+.local/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+.eggs/
+.build/
+build/
+dist/
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.cache/
+
+# Environments
+.env
+.env.*
+.venv/
+venv/
+
+# Flask
+flask_session/
+instance/
+
+# Replit
+.replit
+replit.*
+
+# Node (in case subprojects exist)
+node_modules/
+# Vite/Next/React build outputs
+.next/
+out/
+dist/
+
+# Rust/Tauri (top-level fallback if any)
+target/
