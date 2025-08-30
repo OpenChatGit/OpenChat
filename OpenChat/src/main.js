@@ -1,3 +1,6 @@
+import { streamSimpleResponse } from './ai/stream_simple.js';
+import { streamReasoningResponse } from './ai/stream_reasoning.js';
+ 
 // Tauri API wrapper
 const invoke = async (command, args) => {
     try {
@@ -64,526 +67,7 @@ async function isFastAPIUp() {
     }
 }
 
-async function streamAssistantResponse(finalPrompt, originalUserMessage, conversation) {
-    // Ensure only one concurrent stream: cancel any previous active stream
-    try {
-        if (window.__cancelActiveStream) {
-            await window.__cancelActiveStream();
-        }
-    } catch {}
-
-    const tauri = window.__TAURI__;
-    const messagesArea = document.getElementById('messagesArea');
-    const thinking = document.getElementById('thinking-message');
-    // Ensure a dropdown container exists under the thinking bubble
-    let dropdown = thinking?.querySelector('.reasoning-dropdown');
-    if (thinking && !dropdown) {
-        dropdown = document.createElement('div');
-        dropdown.className = 'reasoning-dropdown';
-        thinking.appendChild(dropdown);
-    }
-    if (!tauri || !tauri.event || !dropdown) {
-        // If UI not ready, bail gracefully
-        return;
-    }
-
-    // Prepare live reasoning element (plain text, no extra box)
-    dropdown.classList.add('open');
-    dropdown.innerHTML = '';
-    const liveTextNode = document.createTextNode('');
-    dropdown.appendChild(liveTextNode);
-
-    let buffer = '';
-    let fullText = '';
-    let finalMode = false; // once [FINAL] encountered
-    let reasoningStarted = false; // saw [REASONING]
-    let reasoningBuffer = '';
-    let finalBuffer = '';
-    let websearchTriggered = false;
-    // Closed flag: ignore late tokens/done/errors after completion or cancel
-    let closed = false;
-    // Watchdog to guard against missing ai_done
-    let lastTokenAt = Date.now();
-    let watchdogTimer = null;
-    let firstTokenTimer = null;
-
-    const startWatchdog = () => {
-        if (watchdogTimer) clearInterval(watchdogTimer);
-        // Check every 1s; allow up to 8s of silence between tokens before finalizing
-        watchdogTimer = setInterval(() => {
-            if (closed) return;
-            // Do not finalize before any tokens arrived
-            if (__tokenCount === 0) return;
-            const gap = Date.now() - lastTokenAt;
-            if (gap > 8000) {
-                console.warn(`[stream] inter-token watchdog fired after ${gap}ms; finalizing with accumulated text`);
-                clearWatchdog();
-                // Synthesize a done event carrying whatever we have
-                onDone({ payload: fullText });
-            }
-        }, 1000);
-        // First-token timeout to avoid hanging forever before any data arrives
-        if (firstTokenTimer) clearTimeout(firstTokenTimer);
-        firstTokenTimer = setTimeout(() => {
-            if (closed) return;
-            if (__tokenCount === 0) {
-                console.warn('[stream] first-token watchdog fired; aborting');
-                onError({ payload: 'Timeout waiting for first token' });
-            }
-        }, 7000);
-    };
-    const clearWatchdog = () => { if (watchdogTimer) { clearInterval(watchdogTimer); watchdogTimer = null; } };
-    // Micro-batching for DOM updates (throttled)
-    let rafScheduled = false;
-    let lastFlushedLength = 0;
-    let lastFlushAt = 0;
-    let isFinalFlush = false;
-    const flushRender = () => {
-        // Always hide raw <think> tags from display for clarity, even if SHOW_TAGS_IN_REASONING is true
-        const baseRaw = SHOW_TAGS_IN_REASONING ? reasoningBuffer : stripMarkers(reasoningBuffer);
-        const base = baseRaw.replace(/<\/?\s*think\s*>/gi, '');
-        let display = base;
-        if (isFinalFlush) {
-            // Heavy cleanup only once at the end
-            let raw = sanitizeReasoningForDisplay(base);
-            if (!raw || !raw.trim()) raw = base;
-            raw = raw
-                .replace(/\s+\[\s*$/gm, '')
-                .replace(/:\s*and\s*\[\s*$/g, ':');
-            // Final dedupe (line/paragraph)
-            const lines = raw.split(/\r?\n/);
-            const out = [];
-            let lastNorm = null;
-            for (const line of lines) {
-                const norm = line.replace(/\s+/g, ' ').trim();
-                if (lastNorm !== null && norm === lastNorm) continue;
-                out.push(line);
-                lastNorm = norm;
-            }
-            let deduped = out.join('\n').replace(/\n{3,}/g, '\n\n');
-            const paras = deduped.split(/\n\s*\n/);
-            if (paras.length >= 2) {
-                const last = paras[paras.length - 1].trim();
-                const prev = paras[paras.length - 2].trim();
-                if (last && prev && last === prev) {
-                    paras.pop();
-                    deduped = paras.join('\n\n');
-                }
-            }
-            display = deduped;
-        } else {
-            // Light in-flight cleanup only (fast)
-            display = base
-                .replace(/\s+\[\s*$/gm, '')
-                .replace(/:\s*and\s*\[\s*$/g, ':');
-        }
-
-        // Only autoscroll if the user is near the bottom to avoid layout thrash
-        const nearBottom = (messagesArea.scrollHeight - messagesArea.scrollTop - messagesArea.clientHeight) < 64;
-        liveTextNode.nodeValue = display;
-        if (nearBottom) {
-            messagesArea.scrollTop = messagesArea.scrollHeight;
-        }
-        lastFlushedLength = reasoningBuffer.length;
-        lastFlushAt = Date.now();
-    };
-    const scheduleRender = () => {
-        // Throttle based on interval and delta size
-        const now = Date.now();
-        const delta = reasoningBuffer.length - lastFlushedLength;
-        // On first content, bypass throttling to show reasoning immediately
-        if (lastFlushedLength === 0 && reasoningBuffer.length > 0 && !rafScheduled) {
-            rafScheduled = true;
-            return requestAnimationFrame(() => {
-                rafScheduled = false;
-                flushRender();
-            });
-        }
-        if (now - lastFlushAt < STREAM_RENDER_INTERVAL_MS && delta < STREAM_MIN_DELTA_CHARS) return;
-        if (rafScheduled) return;
-        rafScheduled = true;
-        requestAnimationFrame(() => {
-            rafScheduled = false;
-            flushRender();
-        });
-    };
-
-    // Helper for simple mode: choose last non-empty paragraph
-    const getLastNonEmptyParagraph = (text) => {
-        if (!text) return '';
-        const parts = String(text).split(/\n\s*\n/).map(s => s.trim()).filter(Boolean);
-        if (parts.length === 0) return String(text).trim();
-        return parts[parts.length - 1];
-    };
-
-    // Quick marker presence regex to skip heavy replaces for common tokens without markers
-    const HAS_MARKERS_RE = /[\[<【】]|Output\s+Format|WEBSEARCH:/i;
-
-    // Remove visible control markers so they don't show in UI
-    const stripMarkers = (text) => {
-        if (!text) return text;
-        // Fast path: most tokens won't contain markers; avoid many regexes
-        if (!HAS_MARKERS_RE.test(text)) return text;
-        return text
-            // XML-like tags
-            .replace(/<\/?\s*think\s*>/gi, '')
-            .replace(/<\/?\s*final\s*>/gi, '')
-            // Bracket markers with optional spaces/case
-            .replace(/\[\s*REASONING[^\]]*\]/gi, '')
-            .replace(/\[\s*FINAL[^\]]*\]/gi, '')
-            .replace(/\[\s*THINK[^\]]*\]/gi, '')
-            // Incomplete trailing marker fragments (during live stream)
-            .replace(/\[\s*(?:REASONING|FINAL|THINK)[^\]]*$/gim, '')
-            // Common synonyms/labels at line starts
-            .replace(/^\s*(Reasoning|Gedanken|Denken)\s*:?/gim, '')
-            .replace(/^\s*(Final(?: Answer)?|Antwort|Answer)\s*:?/gim, '')
-            .replace(/^\s*Answer\s*:?/gim, '')
-            // Internal guidance headers/blocks
-            .replace(/\[\s*Output\s+Format\s*\]/gi, '')
-            .replace(/If you need web data, you may first reply with WEBSEARCH:\s*<query>.*?(?:\r?\n|$)/gi, '')
-            .replace(/```[\s\S]*?\[\s*Output\s+Format\s*\][\s\S]*?```/gi, '')
-            // Decorative fullwidth brackets often used by some models
-            .replace(/[【】]/g, '')
-            ;
-    };
-
-    // Remove internal instruction text from display (keep buffers intact elsewhere)
-    const sanitizeReasoningForDisplay = (text) => {
-        if (!text) return text;
-        try {
-            return text
-                // Output Format header
-                .replace(/\[\s*Output\s+Format\s*\]/gi, '')
-                // Guidance lines from buildReasoningInstruction()
-                .replace(/\[\s*REASONING\s*\]\s*Provide a short, high-level outline.*?(?:\r?\n|$)/gi, '[REASONING]\n')
-                .replace(/\[\s*FINAL\s*\]\s*Provide the final answer for the user\..*?(?:\r?\n|$)/gi, '[FINAL]\n')
-                .replace(/If you need web data, you may first reply with WEBSEARCH:\s*<query>.*?(?:\r?\n|$)/gi, '')
-                // Hide any stray <think> tags from display
-                .replace(/<\/?\s*think\s*>/gi, '')
-                // Fenced blocks that include Output Format
-                .replace(/```[\s\S]*?\[\s*Output\s+Format\s*\][\s\S]*?```/gi, '')
-                ;
-        } catch { return text; }
-    };
-
-    // Remove internal instruction text from final answer
-    const sanitizeFinalForDisplay = (text) => {
-        if (!text) return text;
-        try {
-            return text
-                .replace(/\[\s*Output\s+Format\s*\]/gi, '')
-                .replace(/\[\s*REASONING\s*\]\s*Provide a short, high-level outline.*?(?:\r?\n|$)/gi, '')
-                .replace(/\[\s*FINAL\s*\]\s*Provide the final answer for the user\..*?(?:\r?\n|$)/gi, '')
-                .replace(/If you need web data, you may first reply with WEBSEARCH:\s*<query>.*?(?:\r?\n|$)/gi, '')
-                .replace(/```[\s\S]*?\[\s*Output\s+Format\s*\][\s\S]*?```/gi, '')
-                .replace(/<\/?\s*think\s*>/gi, '')
-                ;
-        } catch { return text; }
-    };
-
-    // Remove duplicated trailing block like XYZXYZ at the end (simple symmetric check)
-    const dedupeTrailingRepeat = (text) => {
-        if (!text || text.length < 8) return text;
-        const maxCheck = Math.min(4000, text.length);
-        const tail = text.slice(-maxCheck);
-        const mid = Math.floor(tail.length / 2);
-        const a = tail.slice(0, mid);
-        const b = tail.slice(mid);
-        if (a && a === b) {
-            return text.slice(0, text.length - (tail.length - mid));
-        }
-        return text;
-    };
-
-    const unlisteners = [];
-
-    const cleanup = async () => {
-        if (fastapiAbort) {
-            try { fastapiAbort(); } catch {}
-            fastapiAbort = null;
-        }
-        for (const un of unlisteners) {
-            try { if (typeof un === 'function') await un(); } catch {}
-        }
-        unlisteners.length = 0;
-        // Close reasoning dropdown if present
-        try { if (dropdown && dropdown.classList) dropdown.classList.remove('open'); } catch {}
-    };
-
-    // Register a cancel function globally for this stream instance
-    const cancelThisStream = async () => {
-        try { closed = true; } catch {}
-        try { clearWatchdog(); } catch {}
-        try { await cleanup(); } catch {}
-        // Clear global cancel hook on manual cancel
-        if (window.__cancelActiveStream === cancelThisStream) {
-            window.__cancelActiveStream = null;
-        }
-    };
-    window.__cancelActiveStream = cancelThisStream;
-
-    let fastapiAbort = null;
-
-    async function streamViaFastAPI(prompt) {
-        const controller = new AbortController();
-        fastapiAbort = () => controller.abort();
-        try {
-            const res = await fetch(`${FASTAPI_URL}/generate/stream`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    model: selectedOllamaModel || 'llama3.1',
-                    prompt,
-                    keep_alive: '10m'
-                }),
-                signal: controller.signal,
-            });
-            if (!res.ok || !res.body) {
-                throw new Error(`FastAPI stream failed: ${res.status}`);
-            }
-            const reader = res.body.getReader();
-            const decoder = new TextDecoder('utf-8');
-            while (true) {
-                const { value, done } = await reader.read();
-                if (done) break;
-                const chunk = decoder.decode(value, { stream: true });
-                if (chunk) await onToken({ payload: chunk });
-            }
-            await onDone({ payload: null });
-        } catch (err) {
-            if (controller.signal.aborted) return; // silent on abort
-            // Fallback: attach Tauri listeners and restart via Tauri immediately
-            try {
-                await setupTauriListeners();
-                await invoke('generate_ai_response_stream', { message: prompt, model: selectedOllamaModel || undefined });
-                return;
-            } catch {}
-            await onError({ payload: String(err || 'error') });
-        } finally {
-            fastapiAbort = null;
-        }
-    }
-
-    const startStream = async (prompt, useFastAPI) => {
-        if (useFastAPI) return streamViaFastAPI(prompt);
-        await invoke('generate_ai_response_stream', { message: prompt, model: selectedOllamaModel || undefined });
-    };
-
-    let __tokenCount = 0;
-    const onToken = async (event) => {
-        if (closed) return;
-        if (firstTokenTimer) { clearTimeout(firstTokenTimer); firstTokenTimer = null; }
-        lastTokenAt = Date.now();
-        const token = typeof event?.payload === 'string' ? event.payload : '';
-        if (!token) return;
-        __tokenCount++;
-        buffer += token;
-        fullText += token;
-
-        // Detect WEBSEARCH early
-        // Only allow tool switch in the very beginning to avoid interrupting reasoning
-        if (!reasoningStarted && buffer.length <= 200 && /^\s*WEBSEARCH:/i.test(buffer)) {
-            // Stop current stream -> cleanup and trigger search
-            if (!websearchTriggered && activeTools && activeTools.has && activeTools.has('websearch')) {
-                websearchTriggered = true;
-                await cleanup();
-                const m = buffer.match(/^\s*WEBSEARCH:\s*(.+)/i);
-                const query = m && m[1] ? m[1].trim() : originalUserMessage;
-                const webResults = await performWebSearch(query || originalUserMessage, 5);
-                const enriched = originalUserMessage + formatWebResultsForPrompt(webResults) + (ENABLE_INTERNAL_REASONING_PROMPT ? buildReasoningInstruction() : '');
-                buffer = '';
-                fullText = '';
-                reasoningStarted = false;
-                await setupListeners();
-                await startStream(enriched);
-                return;
-            }
-        }
-
-        // Live append logic: if not in final mode, write to dropdown; switch to final on [FINAL]
-        // Mark reasoning started either by explicit tag or by first token
-        if (!reasoningStarted) {
-            const idx = buffer.indexOf('[REASONING]');
-            if (idx !== -1) {
-                reasoningStarted = true;
-                buffer = buffer.slice(idx + '[REASONING]'.length);
-            } else if (buffer.length > 0) {
-                reasoningStarted = true;
-            }
-        }
-
-        if (!finalMode) {
-            // Detect [FINAL] or variants (case-insensitive, spaces allowed) or <final> or closing </think>
-            const finalRegex = /\[\s*final\s*\]|<\s*final\s*>/i;
-            const finalIdx = buffer.search(finalRegex);
-            // Also watch for closing </think>
-            const thinkCloseRegex = /<\s*\/\s*think\s*>/i;
-            const thinkCloseIdx = buffer.search(thinkCloseRegex);
-            // Also consider headings like "Final:", "Final Answer:", "Antwort:", or "Answer:" at a line start
-            const headingRegex = /(?:^|\n)\s*(?:#{0,3}\s*)?(?:Final(?: Answer)?|Antwort|Answer)\s*:/i;
-            const headingIdx = buffer.search(headingRegex);
-            // Choose the earliest positive index among candidates
-            const candidates = [finalIdx, thinkCloseIdx, headingIdx].filter(i => i !== -1);
-            const switchIdx = candidates.length ? Math.min(...candidates) : -1;
-            if (switchIdx !== -1) {
-                // write reasoning up to [FINAL]
-                const chunk = buffer.slice(0, switchIdx);
-                if (chunk) {
-                    reasoningBuffer += SHOW_TAGS_IN_REASONING ? chunk : stripMarkers(chunk);
-                    // re-sanitize full buffer in case a tag completed across chunks
-                    scheduleRender();
-                }
-                // switch to final mode
-                let markerLen = 0;
-                if (switchIdx === finalIdx) {
-                    const match = buffer.match(finalRegex);
-                    markerLen = match && match[0] ? match[0].length : '[FINAL]'.length;
-                } else if (switchIdx === thinkCloseIdx) {
-                    const match = buffer.match(thinkCloseRegex);
-                    markerLen = match && match[0] ? match[0].length : '</think>'.length;
-                } else {
-                    const match = buffer.match(headingRegex);
-                    markerLen = match && match[0] ? match[0].length : 0;
-                }
-                buffer = buffer.slice(switchIdx + markerLen);
-                finalMode = true;
-                // do NOT collapse here; keep showing full reasoning until stream finishes
-                if (buffer) {
-                    finalBuffer += stripMarkers(buffer);
-                    buffer = '';
-                }
-            } else {
-                // no [FINAL] yet, keep appending to reasoning
-                reasoningBuffer += SHOW_TAGS_IN_REASONING ? token : stripMarkers(token);
-                // Apply soft cap to keep UI snappy
-                if (reasoningBuffer.length > MAX_REASONING_CHARS) {
-                    reasoningBuffer = reasoningBuffer.slice(-MAX_REASONING_CHARS);
-                }
-                // re-sanitize full buffer to remove any completed markers
-                scheduleRender();
-            }
-            // scroll handled in scheduleRender
-        } else {
-            // Already in final phase, accumulate for final answer
-            finalBuffer += stripMarkers(token);
-        }
-    };
-
-    const onDone = async (event) => {
-        if (closed) return;
-        closed = true;
-        clearWatchdog();
-        if (firstTokenTimer) { clearTimeout(firstTokenTimer); firstTokenTimer = null; }
-        console.log(`[stream] ai_done after ${__tokenCount} tokens`);
-        // Backend may or may not include final payload; prefer accumulated buffers
-        const payload = typeof event?.payload === 'string' ? event.payload : '';
-        // Final flush before closing
-        await new Promise((r) => requestAnimationFrame(() => r()));
-        // Clean trailing duplicates in reasoning before last flush
-        reasoningBuffer = dedupeTrailingRepeat(reasoningBuffer);
-        isFinalFlush = true;
-        flushRender();
-        isFinalFlush = false;
-        await cleanup();
-        // Close dropdown only after final reasoning fully shown (small grace delay)
-        setTimeout(() => { try { if (dropdown && dropdown.classList) dropdown.classList.remove('open'); } catch {} }, 120);
-        // Simple final extraction (optional ultra-simple mode)
-        const source = (typeof payload === 'string' && payload.trim().length) ? payload : fullText;
-        let finalOnly = '';
-        if (SIMPLE_FINAL) {
-            const cleaned = (source || '')
-                .replace(/<\/?\s*think\s*>/gi, '')
-                .replace(/<\/?\s*final\s*>/gi, '');
-            finalOnly = getLastNonEmptyParagraph(cleaned).trim();
-            if (!finalOnly) finalOnly = (finalBuffer || '').trim();
-            if (!finalOnly) finalOnly = (source || '').trim();
-            // Ensure no visible markers leak into final answer
-            finalOnly = stripMarkers(finalOnly || '').trim();
-        } else {
-            // Previous simplified heuristic
-            // 1) Prefer what we accumulated in final mode
-            if (finalBuffer && finalBuffer.trim().length) {
-                finalOnly = finalBuffer;
-            } else if (source && source.length) {
-                const lc = source.toLowerCase();
-                const thinkClose = '</think>';
-                const thinkIdx = lc.lastIndexOf(thinkClose);
-                if (thinkIdx !== -1) {
-                    finalOnly = source.slice(thinkIdx + thinkClose.length);
-                }
-                if (!finalOnly || !finalOnly.trim().length) {
-                    const m1 = /[\s\S]*?\[\s*final\s*\]([\s\S]*)/i.exec(source);
-                    if (m1) finalOnly = m1[1];
-                }
-                if (!finalOnly || !finalOnly.trim().length) {
-                    const m2 = /[\s\S]*?<\s*final\s*>\s*([\s\S]*)/i.exec(source);
-                    if (m2) finalOnly = m2[1];
-                }
-                if (!finalOnly || !finalOnly.trim().length) {
-                    const m3 = /(?:^|\n)\s*(?:#{0,3}\s*)?(?:Final(?: Answer)?|Antwort|Answer)\s*:?\s*\n?([\s\S]*)/i.exec(source);
-                    if (m3) finalOnly = m3[1];
-                }
-                if (!finalOnly || !finalOnly.trim().length) finalOnly = reasoningBuffer;
-            }
-            if (!finalOnly || !finalOnly.trim()) {
-                // Hard fallback to the complete streamed text
-                finalOnly = (source || fullText || '').trim() || '…';
-                finalOnly = stripMarkers(finalOnly || '').trim();
-            }
-            // Final cleanup: ensure no instruction text leaks into the answer
-            finalOnly = sanitizeFinalForDisplay(finalOnly).trim();
-        }
-        hideThinkingAnimation();
-        const aiMessage = { role: 'assistant', content: finalOnly, reasoning: null, timestamp: new Date() };
-        conversation.messages.push(aiMessage);
-        // Render immediately to avoid any animation-related failure paths
-        displayMessage(aiMessage);
-        conversation.updated_at = new Date();
-        updateConversationList();
-        // Clear global cancel hook when this stream completes
-        if (window.__cancelActiveStream === cancelThisStream) {
-            window.__cancelActiveStream = null;
-        }
-    };
-
-    const onError = async (event) => {
-        if (closed) return;
-        closed = true;
-        clearWatchdog();
-        if (firstTokenTimer) { clearTimeout(firstTokenTimer); firstTokenTimer = null; }
-        await cleanup();
-        const aiMessage = { role: 'assistant', content: 'Fehler beim Streamen der Antwort.', timestamp: new Date() };
-        await displayMessageWithTypewriter(aiMessage);
-        await new Promise(resolve => setTimeout(resolve, 500));
-        hideThinkingAnimation();
-        // Clear global cancel hook on error
-        if (window.__cancelActiveStream === cancelThisStream) {
-            window.__cancelActiveStream = null;
-        }
-    };
-
-    // Tauri listener attach helper
-    const setupTauriListeners = async () => {
-        const un1 = await tauri.event.listen('ai_token', onToken);
-        const un2 = await tauri.event.listen('ai_done', onDone);
-        const un3 = await tauri.event.listen('ai_error', onError);
-        unlisteners.push(un1, un2, un3);
-    };
-
-    async function setupListeners(useFastAPI) {
-        if (useFastAPI) {
-            // FastAPI path uses fetch streaming; no Tauri event listeners
-            return;
-        }
-        await setupTauriListeners();
-    }
-
-    const fastapiAvailable = USE_FASTAPI_STREAM && await isFastAPIUp();
-    await setupListeners(fastapiAvailable);
-    console.log('[stream] listeners attached, starting stream');
-    startWatchdog();
-    await startStream(finalPrompt, fastapiAvailable);
-}
+// Reasoning streaming moved to ./ai/stream_reasoning.js
 
 // Web Search tool wrapper
 async function performWebSearch(query, max = 5) {
@@ -597,12 +81,32 @@ async function performWebSearch(query, max = 5) {
     }
 }
 
+// Reasoning model detection helpers and overrides
+// You can force a model to be treated as reasoning or non-reasoning via localStorage keys:
+//   forceReasoning:<modelName> = "true"   OR   forceNonReasoning:<modelName> = "true"
+const REASONING_MODEL_HINTS = [
+    'reason', 'r1', 'o4', 'think', 'qwen2.5-r', 'r-', 'deepseek-r', 'glm-r'
+];
+const REASONING_MODEL_EXACT = new Set([
+    // Add exact names here if needed, e.g. 'deepseek-r1:8b'
+]);
+
+function isReasoningModelName(name) {
+    if (!name) return false;
+    const n = String(name).toLowerCase();
+    // Overrides
+    try {
+        if (localStorage.getItem(`forceReasoning:${name}`) === 'true') return true;
+        if (localStorage.getItem(`forceNonReasoning:${name}`) === 'true') return false;
+    } catch {}
+    if (REASONING_MODEL_EXACT.has(n)) return true;
+    return REASONING_MODEL_HINTS.some(h => n.includes(h));
+}
+
 // Detect if a selected model is likely a reasoning model (heuristic; adjustable)
 function isReasoningModelActive() {
     if (!selectedOllamaModel) return false;
-    const name = selectedOllamaModel.toLowerCase();
-    const hints = ['reason', 'r1', 'o4', 'deepseek', 'think', 'qwen2.5-r', 'r-'];
-    return hints.some(h => name.includes(h));
+    return isReasoningModelName(selectedOllamaModel);
 }
 
 // Ask LLM to return structured sections when reasoning is active
@@ -943,9 +447,6 @@ async function sendMessage(messageContent) {
     // Display user message
     displayMessage(userMessage);
     
-    // Show thinking animation
-    showThinkingAnimation();
-    
     // Generate AI response using Tauri backend
     try {
         // If Web Search tool is active, add tool-aware instruction so models know they can use it
@@ -953,43 +454,41 @@ async function sendMessage(messageContent) {
         const reasoningAware = (ENABLE_INTERNAL_REASONING_PROMPT && isReasoningModelActive()) ? buildReasoningInstruction() : '';
         let finalPrompt = messageContent + toolAware + reasoningAware;
 
-        if (isReasoningModelActive()) {
-            // Stream tokens and live-update the reasoning dropdown
-            await streamAssistantResponse(finalPrompt, messageContent, conversation);
-        } else {
-            const aiResponse = await invoke('generate_ai_response', {
-                message: finalPrompt,
-                model: selectedOllamaModel || undefined
+        // Show thinking animation (reasoning UI only if a reasoning model is active)
+        showThinkingAnimation();
+        // Route by model type to avoid collisions between reasoning and non-reasoning logic
+        if (!isReasoningModelActive()) {
+            await streamSimpleResponse({
+                finalPrompt,
+                conversation,
+                selectedModel: selectedOllamaModel || undefined,
+                ui: {
+                    hideThinking: hideThinkingAnimation,
+                    displayTypewriter: displayMessageWithTypewriter,
+                    displayNow: displayMessage,
+                    updateConversationList
+                }
             });
-            
-            let finalAnswer = aiResponse || '';
-            // If the model requested web search explicitly, perform it and re-prompt
-            const toolRequested = typeof finalAnswer === 'string' && /^\s*WEBSEARCH:\s*(.+)/i.test(finalAnswer);
-            if (toolRequested && activeTools && activeTools.has && activeTools.has('websearch')) {
-                const m = finalAnswer.match(/^\s*WEBSEARCH:\s*(.+)/i);
-                const query = m && m[1] ? m[1].trim() : messageContent;
-                const webResults = await performWebSearch(query || messageContent, 5);
-                const enriched = messageContent + formatWebResultsForPrompt(webResults);
-                finalAnswer = await invoke('generate_ai_response', {
-                    message: enriched,
-                    model: selectedOllamaModel || undefined
-                });
-            }
-
-            // Hide thinking animation now that we have the final answer
-            hideThinkingAnimation();
-
-            const aiMessage = {
-                role: 'assistant',
-                content: finalAnswer,
-                timestamp: new Date()
-            };
-            conversation.messages.push(aiMessage);
-            await displayMessageWithTypewriter(aiMessage);
-
-            // Update conversation timestamp
-            conversation.updated_at = new Date();
-            updateConversationList();
+        } else {
+            // Route reasoning models to dedicated module
+            await streamReasoningResponse({
+                finalPrompt,
+                originalUserMessage: messageContent,
+                conversation,
+                selectedModel: selectedOllamaModel || undefined,
+                ui: {
+                    hideThinking: hideThinkingAnimation,
+                    displayNow: displayMessage,
+                    displayTypewriter: displayMessageWithTypewriter,
+                    updateConversationList
+                },
+                tools: {
+                    activeTools,
+                    performWebSearch,
+                    formatWebResultsForPrompt,
+                    buildReasoningInstruction
+                }
+            });
         }
         
     } catch (error) {
@@ -1152,8 +651,16 @@ async function displayMessageWithTypewriter(message) {
         textContainer.className = 'typewriter-container';
         messageDiv.appendChild(contentDiv);
         contentDiv.appendChild(textContainer);
-        await typeWriterEffect(textContainer, (message.content || ''));
+        // Append to DOM before typing so it becomes visible
+        messagesArea.appendChild(messageDiv);
+        // Ensure we start at bottom
+        messagesArea.scrollTop = messagesArea.scrollHeight;
+        // Faster typewriter for non-reasoning models to avoid long waits
+        const typeSpeed = 10; // ms per character (was default 30)
+        await typeWriterEffect(textContainer, (message.content || ''), typeSpeed);
         textContainer.replaceWith((() => { const div = document.createElement('div'); div.innerHTML = finalText; return div; })());
+        // Final scroll to bottom after rendering
+        messagesArea.scrollTop = messagesArea.scrollHeight;
     } else {
         // User messages appear instantly
         displayMessage(message);
@@ -1549,9 +1056,11 @@ async function updateOllamaCount() {
 async function toggleOllamaMenu(event) {
     event.stopPropagation();
     const item = document.getElementById('ollamaMenuItem');
-    if (!item) return;
+    const menu = document.getElementById('mainTitleMenu');
+    if (!item || !menu) return;
 
-    const existing = item.querySelector('.main-title-submenu');
+    // If a submenu already exists anywhere in the menu, just toggle it
+    const existing = menu.querySelector('.main-title-submenu');
     if (existing) {
         existing.classList.toggle('show');
         return;
@@ -1561,13 +1070,8 @@ async function toggleOllamaMenu(event) {
 
     const submenu = document.createElement('div');
     submenu.className = 'main-title-submenu';
-
-    if (!models.length) {
-        const empty = document.createElement('div');
-        empty.className = 'dropdown-item disabled';
-        empty.textContent = 'No models found';
-        submenu.appendChild(empty);
-    } else {
+    
+    if (models.length) {
         // If a previously selected model is no longer available, clear it
         if (selectedOllamaModel && !models.some(m => m.name === selectedOllamaModel)) {
             selectedOllamaModel = null;
@@ -1584,6 +1088,18 @@ async function toggleOllamaMenu(event) {
             left.className = 'dropdown-item-left';
             // Remove robot icon; show plain model name
             left.textContent = m.name;
+            // Annotate reasoning models for clarity
+            const reasoning = isReasoningModelName(m.name);
+            if (reasoning) {
+                const badge = document.createElement('span');
+                badge.textContent = ' (reasoning)';
+                badge.style.opacity = '0.8';
+                badge.style.fontSize = '0.9em';
+                badge.style.marginLeft = '4px';
+                left.appendChild(badge);
+            } else {
+                // No tooltip
+            }
             row.appendChild(left);
 
             // Right side checkmark if selected
@@ -1599,7 +1115,23 @@ async function toggleOllamaMenu(event) {
         });
     }
 
-    item.appendChild(submenu);
+    // Attach submenu to the overall menu container for precise positioning
+    menu.appendChild(submenu);
+
+    // Compute exact position so the submenu's top aligns with the TOP of the main menu
+    const itemRect = item.getBoundingClientRect();
+    const menuRect = menu.getBoundingClientRect();
+    const cs = window.getComputedStyle(menu);
+    const padTop = parseFloat(cs.paddingTop || '0') || 0;
+    const borderTop = parseFloat(cs.borderTopWidth || '0') || 0;
+    // Place submenu's top at the visual top edge of the menu with a slightly larger downward nudge
+    const top = -(padTop + borderTop) + 5;
+    const gap = 3; // visual gap between parent and submenu
+    const left = (itemRect.right - menuRect.left) + gap;
+    // Use !important to ensure no stylesheet (including Tauri-injected) overrides this precise positioning
+    submenu.style.setProperty('top', `${top}px`, 'important');
+    submenu.style.setProperty('left', `${left}px`, 'important');
+
     requestAnimationFrame(() => submenu.classList.add('show'));
 }
 
@@ -1610,8 +1142,8 @@ function selectModelByName(modelName) {
     localStorage.setItem('selectedOllamaModel', modelName);
 
     // Update checkmarks in the open submenu without closing menus
-    const item = document.getElementById('ollamaMenuItem');
-    const submenu = item?.querySelector('.main-title-submenu');
+    const menu = document.getElementById('mainTitleMenu');
+    const submenu = menu?.querySelector('.main-title-submenu');
     if (submenu) {
         submenu.querySelectorAll('.dropdown-item').forEach(row => {
             const name = row.querySelector('.dropdown-item-left')?.textContent?.trim();
@@ -1717,8 +1249,8 @@ document.addEventListener('click', (e) => {
             dropdown.classList.remove('open');
             menu.classList.remove('show');
         }
-        const item = document.getElementById('ollamaMenuItem');
-        const submenu = item?.querySelector('.main-title-submenu');
+        const menuEl = document.getElementById('mainTitleMenu');
+        const submenu = menuEl?.querySelector('.main-title-submenu');
         if (submenu) submenu.classList.remove('show');
     }
     

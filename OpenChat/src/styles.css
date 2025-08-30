@@ -734,15 +734,19 @@ body {
 /* Right-side submenu for Ollama models */
 .main-title-submenu {
     position: absolute;
-    top: 50%;
+    /* JS computes exact top; keep default at 0 to avoid pre-offset */
+    top: 0;
     left: 100%;
-    transform: translateY(-50%);
+    transform: none;
     margin-left: 0.5rem;
     background-color: var(--bg-secondary);
     border: 1px solid var(--border-color);
     border-radius: 12px;
     box-shadow: var(--shadow-lg);
     min-width: 220px;
+    /* Keep within viewport and scroll if too tall */
+    max-height: 60vh;
+    overflow-y: auto;
     z-index: 1100;
     display: none;
     padding: 0.25rem;

@@ -1,35 +1,36 @@
 # OpenChat
 
-A lightweight, local-first desktop chat app built with Tauri and vanilla HTML/CSS/JS. Optimized for fast, responsive UX and a clean, centered layout with a custom overlay scrollbar.
+Local-first desktop chat app built with Tauri and vanilla HTML/CSS/JS. Fast UX, clean design, and native streaming via Ollama.
 
 — [Changelog](CHANGELOG.md) • [License](LICENSE.md)
 
 
 ## Features
-- **Responsive first message UX**: User messages and the “Thinking…” indicator render instantly, even on a fresh start or after deleting a chat.
-- **Thinking indicator (English)**: Plain text with a subtle left-to-right shimmer effect for a modern, minimal look.
-- **Typewriter effect for AI**: Assistant messages render with a typewriter animation, then swap to fully formatted Markdown.
-- **Custom overlay scrollbar**: Pinned flush-right, light-gray thumb, with the native scrollbars hidden in the messages area.
-- **Centered welcome layout**: New sessions show a centered input and welcome prompt, then transition smoothly to chat mode.
-- **Conversations sidebar**: Auto-updating titles, timestamps, rename, and delete with a confirm flow.
-- **Local Ollama integration (optional)**: Detects local Ollama and lets you pick a model. Backend responses are generated via Tauri.
-- **Dark and light theme tokens**: App defaults to dark styling with variables ready for light theming.
+- **Reasoning streaming (new)**: Live reasoning updates in a dropdown, final answer renders instantly. Implemented in `OpenChat/src/ai/stream_reasoning.js`.
+- **Non-reasoning streaming**: Smooth typewriter effect at 10 ms/char (fast) via `OpenChat/src/ai/stream_simple.js`.
+- **Responsive first message UX**: Instant render of user message and “Thinking…” indicator.
+- **Clean UI**: Minimal thinking indicator with shimmer, centered welcome layout, custom overlay scrollbar.
+- **Conversations sidebar**: Titles/timestamps update live; rename/delete with confirm.
+- **Local Ollama via Tauri**: Native streaming with `generate_ai_response_stream` and events (`ai_token`, `ai_done`, `ai_error`).
+- **Theming tokens**: Dark-first; light theme variables ready.
 
 
 ## Project Structure
 - `OpenChat/src/` — Frontend (HTML, CSS, JS)
   - `index.html` — Main UI markup
   - `styles.css` — Global styles (overlay scrollbar, layout, animations)
-  - `main.js` — App logic (messages, conversations, thinking indicator, typewriter, sidebar)
-- `OpenChat/src-tauri/` — Tauri Rust backend (commands, packaging)
-- `templates/`, `static/`, `app.py`, `main.py` — Additional files (not required to run the Tauri app)
+  - `main.js` — App logic and routing for simple vs. reasoning streaming
+  - `ai/stream_simple.js` — Non-reasoning streaming (typewriter)
+  - `ai/stream_reasoning.js` — Reasoning streaming (live dropdown + instant final)
+- `OpenChat/src-tauri/` — Tauri backend (Ollama streaming, websearch cmd, warmup)
+- `templates/`, `static/`, `app.py`, `main.py` — Additional files (not required for Tauri app)
 
 
 ## Requirements
-- Windows (tested), macOS/Linux should also work with Tauri prerequisites.
+- Windows (tested). macOS/Linux should also work per Tauri prerequisites.
 - Rust toolchain (stable) and Tauri CLI
-- Node.js recommended (for tooling), though this app uses vanilla frontend assets.
-- Optional: **Ollama** running locally for model-backed responses.
+- Node.js optional (tooling only)
+- Optional: **Ollama** running locally for model-backed responses
 
 
 ## Setup (Windows)
@@ -72,10 +73,19 @@ cargo tauri build --manifest-path .\OpenChat\src-tauri\Cargo.toml
 - **View/rename/delete chats**: Hover a conversation in the sidebar for actions. Deletion asks for confirmation.
 - **Model selection**: Open the main title dropdown, choose Ollama, and pick an available local model.
 
+### Reasoning vs. Non-Reasoning
+- If a reasoning model is selected, streaming runs via `stream_reasoning.js`:
+  - Live reasoning appears in a dropdown while generating.
+  - Final answer renders instantly (no typewriter) once `[FINAL]`/`</think>`/heading is detected.
+- For standard models, streaming uses `stream_simple.js` with fast typewriter (10 ms/char).
+
 
 ## Configuration
 - Selected Ollama model is saved in `localStorage` and restored between sessions.
-- The app runs in dark mode by default; light theme variables are present in `styles.css`.
+- Dark mode by default; light theme variables live in `styles.css`.
+
+## Websearch status
+- Websearch is temporarily disabled to reduce hallucination risk. Features relying on it (web citations, enrichment) are inactive for now.
 
 
 ## Changelog
@@ -86,13 +96,14 @@ See the full history in [CHANGELOG.md](CHANGELOG.md).
 - Message persistence (store conversations on disk)
 - Export/import conversations
 - Settings panel (themes, typewriter speed, scrollbar preferences)
-- Streaming responses
+- Enhanced streaming controls (pause/cancel, retries)
 - Multi-model selection UI and status
 
 
 ## Troubleshooting
 - "Backend not available" in console: Run via Tauri (not a plain browser) so `invoke` calls work.
 - No Ollama models detected: Ensure `http://127.0.0.1:11434/api/tags` is reachable and Ollama is running.
+- Reasoning stream shows but flashes on fullscreen: known issue; being investigated in CSS (`styles.css`) and FLIP logic in `main.js`.
 - Build issues on Windows: Re-check Tauri prerequisites (MSVC, WebView2) per official docs.
 
 

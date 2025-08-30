@@ -4,6 +4,31 @@ All notable changes to this project will be documented in this file.
 
 The format is inspired by Keep a Changelog and uses calendar dates. The project does not yet adhere to Semantic Versioning.
 
+## [0.1.2] - 2025-08-30
+### Notice
+- Websearch ist vorübergehend deaktiviert, um das Risiko von Halluzinationen/Fehlinformationen zu reduzieren. Re-Enable folgt nach weiteren Stabilitätsprüfungen.
+### Changed
+- Frontend: extracted reasoning streaming into `OpenChat/src/ai/stream_reasoning.js`.
+  - Handles reasoning live dropdown updates, final instant render, watchdogs, and websearch trigger.
+- Frontend: `OpenChat/src/main.js` now routes reasoning models to `streamReasoningResponse()` and keeps non-reasoning on `stream_simple.js`.
+- Performance: increased typewriter speed for non-reasoning models to 10 ms/char in `displayMessageWithTypewriter()`.
+
+### Added
+- New module `OpenChat/src/ai/stream_reasoning.js` with Tauri event listeners (`ai_token`, `ai_done`, `ai_error`) and invocation of `generate_ai_response_stream`.
+
+### Fixed
+- Reduced UI jank by micro-batching reasoning-render updates and ensuring proper cleanup of listeners and dropdown state.
+- Ensured single active stream via `window.__cancelActiveStream` across both simple and reasoning paths.
+
+### Known issues / Risks
+- Websearch trigger relies on early `WEBSEARCH: <query>` emission; late triggers during final phase are ignored by design.
+- If Tauri is not available (non-Tauri context), reasoning streaming will not function; simple path can still work if backend HTTP is available.
+- Model unavailability (Ollama not running or model missing) surfaces as `ai_error`; user must ensure Ollama is running on 127.0.0.1:11434.
+- Helper naming differences could break enrichment if customized (expects `performWebSearch`, `formatWebResultsForPrompt`, `buildReasoningInstruction`).
+ - Entering fullscreen can cause a one-time flash in the UI. Likely related to transitions or reflow during layout changes; to be investigated in `OpenChat/src/styles.css` and `OpenChat/src/main.js` scroll/FLIP logic.
+ - There may be additional issues not yet discovered; please report anomalies to help stabilize this release.
+ - Aufgrund der temporären Deaktivierung von Websearch funktionieren web-gestützte Antworten und Zitationshinweise nicht.
+
 ## [0.1.1] - 2025-08-28
 ### Notice
 - Reasoning stream can still take long to produce tokens in some cases. We added stronger client-side safeguards, but are investigating backend-side cancellation and possibly embedding HTTP streaming in Tauri (Axum) to further improve responsiveness.
