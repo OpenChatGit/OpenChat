@@ -1005,24 +1005,28 @@ function selectModel(modelType) {
     }
 }
 
-// Fetch list of local Ollama models
+// Fetch list of local Ollama models via Tauri (avoids CORS/release restrictions)
 async function fetchOllamaModels() {
     try {
-        const res = await fetch('http://127.0.0.1:11434/api/tags');
-        if (!res.ok) throw new Error('Ollama not reachable');
-        const data = await res.json();
-        return Array.isArray(data?.models) ? data.models : [];
+        const tauri = window.__TAURI__;
+        const inv = tauri?.core?.invoke || tauri?.invoke || invoke;
+        const names = await inv('get_ollama_models'); // returns Vec<String>
+        if (Array.isArray(names)) {
+            // Normalize to previous shape { name }
+            return names.map((n) => ({ name: n }));
+        }
+        return [];
     } catch (e) {
-        console.warn('Failed to fetch Ollama models:', e.message);
+        console.warn('Failed to fetch Ollama models (tauri):', e?.message || e);
         return [];
     }
 }
 
-// Probe connectivity to Ollama without relying on model count
+// Probe connectivity to Ollama via Tauri
 async function checkOllamaReachable() {
     try {
-        const res = await fetch('http://127.0.0.1:11434/api/tags', { method: 'GET' });
-        return res.ok;
+        const models = await fetchOllamaModels();
+        return Array.isArray(models) && models.length >= 0; // reachable if command succeeded
     } catch (_) {
         return false;
     }

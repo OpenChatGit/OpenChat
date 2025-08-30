@@ -113,6 +113,39 @@ fn generate_ai_response_stream(window: tauri::Window, message: &str, model: Opti
     Ok(())
 }
 
+// -----------------
+// Ollama tags (model list) helper for frontend (avoids CORS in release)
+// -----------------
+
+#[derive(Deserialize)]
+struct OllamaTagsResponseModel {
+    name: String,
+}
+
+#[derive(Deserialize)]
+struct OllamaTagsResponse {
+    models: Vec<OllamaTagsResponseModel>,
+}
+
+#[tauri::command]
+fn get_ollama_models() -> Result<Vec<String>, String> {
+    let client = HTTP_CLIENT_BLOCKING.clone();
+    let resp = client
+        .get("http://127.0.0.1:11434/api/tags")
+        .send()
+        .map_err(|e| format!("Request failed: {}", e))?;
+
+    if !resp.status().is_success() {
+        return Err(format!("HTTP status {}", resp.status()));
+    }
+
+    let data: OllamaTagsResponse = resp
+        .json()
+        .map_err(|e| format!("Parse failed: {}", e))?;
+
+    Ok(data.models.into_iter().map(|m| m.name).collect())
+}
+
 #[derive(Deserialize)]
 struct OllamaGenerateResponse {
     response: Option<String>,
@@ -168,7 +201,7 @@ fn generate_ai_response(message: &str, model: Option<String>) -> String {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![generate_ai_response, web_search, generate_ai_response_stream, warm_model])
+        .invoke_handler(tauri::generate_handler![generate_ai_response, web_search, generate_ai_response_stream, warm_model, get_ollama_models])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

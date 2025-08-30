@@ -85,7 +85,7 @@ export async function streamReasoningResponse({ finalPrompt, originalUserMessage
         console.warn('[reasoning] first-token watchdog fired; aborting');
         onError({ payload: 'Timeout waiting for first token' });
       }
-    }, 7000);
+    }, 12000);
   };
   const clearWatchdog = () => { if (watchdogTimer) { clearInterval(watchdogTimer); watchdogTimer = null; } };
 
@@ -272,7 +272,8 @@ export async function streamReasoningResponse({ finalPrompt, originalUserMessage
     if (firstTokenTimer) { clearTimeout(firstTokenTimer); firstTokenTimer = null; }
     await cleanup();
     try { ui.hideThinking?.(); } catch {}
-    const errorMessage = { role: 'assistant', content: 'Fehler beim Streamen der Antwort.', timestamp: new Date() };
+    const detail = typeof event?.payload === 'string' && event.payload.trim().length ? `\n\nDetails: ${event.payload}` : '';
+    const errorMessage = { role: 'assistant', content: 'Fehler beim Streamen der Antwort.' + detail, timestamp: new Date() };
     if (ui.displayNow) ui.displayNow(errorMessage);
     conversation.updated_at = new Date();
     try { ui.updateConversationList?.(); } catch {}
@@ -289,7 +290,12 @@ export async function streamReasoningResponse({ finalPrompt, originalUserMessage
   const startStream = async (prompt) => {
     const invoke = tauri?.core?.invoke || tauri?.invoke;
     if (!invoke) throw new Error('Tauri invoke not available');
-    await invoke('generate_ai_response_stream', { message: prompt, model: selectedModel || undefined });
+    try {
+      await invoke('generate_ai_response_stream', { message: prompt, model: selectedModel || undefined });
+    } catch (e) {
+      console.error('[reasoning] invoke generate_ai_response_stream failed:', e);
+      onError({ payload: e?.message || String(e) });
+    }
   };
 
   await setupTauriListeners();
