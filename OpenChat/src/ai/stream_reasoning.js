@@ -1,4 +1,5 @@
 // Reasoning streaming module
+import { chooseResponseLanguage, languageNameFromCode } from './language_detection.js';
 // Handles reasoning models: live reasoning dropdown + final instant render
 // Usage:
 //   streamReasoningResponse({
@@ -297,6 +298,14 @@ export async function streamReasoningResponse({ finalPrompt, originalUserMessage
       onError({ payload: e?.message || String(e) });
     }
   };
+
+  // Detect user language and prepend directive to enforce response language
+  try {
+    const code = chooseResponseLanguage(originalUserMessage || finalPrompt, 'en');
+    const name = languageNameFromCode(code);
+    const directive = `Please respond exclusively in ${name} (${code}).\n`;
+    finalPrompt = `${directive}${finalPrompt}`;
+  } catch {}
 
   await setupTauriListeners();
   startWatchdog();

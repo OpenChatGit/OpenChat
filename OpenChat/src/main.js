@@ -18,6 +18,19 @@ const invoke = async (command, args) => {
     }
 };
 
+// Manage Ollama polling interval with adaptive backoff and visibility pause
+function restartOllamaPolling() {
+    try {
+        if (window.__ollamaStatusIntervalId) {
+            clearInterval(window.__ollamaStatusIntervalId);
+            window.__ollamaStatusIntervalId = null;
+        }
+        if (document.hidden) return; // don't poll while hidden
+        const period = window.__ollamaPollingMs || 5000;
+        window.__ollamaStatusIntervalId = setInterval(updateOllamaCount, period);
+    } catch {}
+}
+
 // Warm the currently selected model to reduce first-token latency
 async function warmModel(modelName) {
     const model = modelName || selectedOllamaModel || null;
@@ -562,32 +575,59 @@ function typeWriterEffect(element, text, speed = 30) {
     return new Promise((resolve) => {
         let i = 0;
         element.innerHTML = '';
-        
-        // Add cursor
+
+        // Single accumulating text node to avoid per-char DOM nodes
+        const textNode = document.createTextNode('');
+        element.appendChild(textNode);
+
+        // Cursor element
         const cursor = document.createElement('span');
         cursor.className = 'typing-cursor';
         cursor.textContent = '|';
         element.appendChild(cursor);
-        
-        const timer = setInterval(() => {
-            if (i < text.length) {
-                // Insert character before cursor
-                const textNode = document.createTextNode(text.charAt(i));
-                element.insertBefore(textNode, cursor);
-                i++;
-                
-                // Scroll to bottom while typing
-                const messagesArea = document.getElementById('messagesArea');
-                if (messagesArea) {
-                    messagesArea.scrollTop = messagesArea.scrollHeight;
-                }
-            } else {
-                // Remove cursor when done
+
+        // rAF-driven loop to batch multiple chars per frame
+        let lastTime = performance.now();
+        let carry = 0; // accumulated ms to convert into characters
+        let lastScrollAt = 0;
+
+        const step = (now) => {
+            if (i >= text.length) {
                 cursor.remove();
-                clearInterval(timer);
                 resolve();
+                return;
             }
-        }, speed);
+
+            const dt = now - lastTime;
+            lastTime = now;
+            carry += dt;
+
+            // how many chars to add this frame
+            const charsThisFrame = Math.max(1, Math.floor(carry / speed));
+            if (charsThisFrame > 0) carry -= charsThisFrame * speed;
+
+            const nextI = Math.min(text.length, i + charsThisFrame);
+            if (nextI !== i) {
+                // Update the single text node once per frame
+                textNode.nodeValue = text.slice(0, nextI);
+                i = nextI;
+            }
+
+            // Throttled scroll-to-bottom only if user is near bottom
+            const messagesArea = document.getElementById('messagesArea');
+            if (messagesArea) {
+                const nearBottom = (messagesArea.scrollHeight - messagesArea.scrollTop - messagesArea.clientHeight) < 72;
+                if (nearBottom && (now - lastScrollAt) > 80) {
+                    messagesArea.scrollTop = messagesArea.scrollHeight;
+                    lastScrollAt = now;
+                }
+            }
+
+            // Keep the cursor at the end (no layout-heavy inserts)
+            requestAnimationFrame(step);
+        };
+
+        requestAnimationFrame(step);
     });
 }
 
@@ -1025,9 +1065,14 @@ async function fetchOllamaModels() {
 // Probe connectivity to Ollama via Tauri
 async function checkOllamaReachable() {
     try {
-        const models = await fetchOllamaModels();
-        return Array.isArray(models) && models.length >= 0; // reachable if command succeeded
+        // Call the Tauri command directly so that connection errors throw
+        const tauri = window.__TAURI__;
+        const inv = tauri?.core?.invoke || tauri?.invoke || invoke;
+        await inv('get_ollama_models');
+        // If we reached here without throwing, Ollama responded => reachable
+        return true;
     } catch (_) {
+        // Any error means Ollama is not reachable
         return false;
     }
 }
@@ -1043,15 +1088,31 @@ async function updateOllamaCount() {
         models = await fetchOllamaModels();
     }
 
-    // Update count
-    countEl.textContent = String(models.length || 0);
+    // Cache last values to avoid unnecessary DOM writes
+    const lastReachable = window.__ollamaLastReachable;
+    const lastCount = window.__ollamaLastCount;
+    const newCount = models.length || 0;
 
-    // Update status dot
-    if (statusDot) {
+    if (lastCount !== newCount) {
+        countEl.textContent = String(newCount);
+        window.__ollamaLastCount = newCount;
+    }
+
+    if (statusDot && lastReachable !== reachable) {
         statusDot.classList.toggle('online', reachable);
         statusDot.classList.toggle('offline', !reachable);
         statusDot.setAttribute('title', reachable ? 'Ollama connected' : 'Ollama not connected');
+        window.__ollamaLastReachable = reachable;
     }
+
+    // Adaptive polling backoff: poll slower when unreachable
+    try {
+        const desired = reachable ? 5000 : 15000;
+        if (window.__ollamaPollingMs !== desired) {
+            window.__ollamaPollingMs = desired;
+            if (typeof restartOllamaPolling === 'function') restartOllamaPolling();
+        }
+    } catch {}
 
     return models;
 }
@@ -1329,11 +1390,9 @@ document.addEventListener('DOMContentLoaded', () => {
         warmModel(selectedOllamaModel);
     }
     
-    // Auto-refresh Ollama status and count every 5 seconds (ensure single interval)
-    if (window.__ollamaStatusIntervalId) {
-        clearInterval(window.__ollamaStatusIntervalId);
-    }
-    window.__ollamaStatusIntervalId = setInterval(updateOllamaCount, 5000);
+    // Auto-refresh Ollama status with adaptive polling
+    window.__ollamaPollingMs = window.__ollamaPollingMs || 5000;
+    restartOllamaPolling();
     
     // Disable default browser tooltips completely
     const disableBrowserTooltips = () => {
@@ -1382,8 +1441,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initialize layout
     initializeCenteredLayout();
     
-    // Ensure layout stays correct
-    setInterval(initializeCenteredLayout, 1000);
+    // Removed periodic layout maintenance to reduce idle CPU usage
 });
 
 // Handle page visibility changes

@@ -1,4 +1,5 @@
 // Non-reasoning streaming module
+import { chooseResponseLanguage, languageNameFromCode } from './language_detection.js';
 // Minimal dependencies: relies on Tauri invoke + event bus and small UI callbacks
 
 export async function streamSimpleResponse({ finalPrompt, conversation, selectedModel, ui }) {
@@ -161,6 +162,16 @@ export async function streamSimpleResponse({ finalPrompt, conversation, selected
       onDone();
     }
   }, HARD_TIMEOUT_MS);
+
+  // Detect language from the last user message in the conversation (if any)
+  try {
+    const lastUser = [...(conversation?.messages || [])].reverse().find(m => m.role === 'user');
+    const sample = lastUser?.content || finalPrompt;
+    const code = chooseResponseLanguage(sample, 'en');
+    const name = languageNameFromCode(code);
+    const directive = `Please respond exclusively in ${name} (${code}).\n`;
+    finalPrompt = `${directive}${finalPrompt}`;
+  } catch {}
 
   await setupTauriListeners();
   await startStream();
