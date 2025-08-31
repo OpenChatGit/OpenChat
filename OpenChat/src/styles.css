@@ -663,6 +663,25 @@ body {
     gap: 0.75rem;
 }
 
+/* Ensure model name text doesn't wrap; badge sits to the right */
+.dropdown-item-left .model-name {
+    white-space: nowrap;
+}
+
+/* Compact pill badge for reasoning models in Ollama submenu */
+.reasoning-badge {
+    margin-left: 6px;
+    padding: 2px 6px;
+    font-size: 0.7rem;
+    line-height: 1.2;
+    color: #ffffff;
+    background-color: rgba(255, 255, 255, 0.14);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 999px;
+    flex: 0 0 auto; /* don't stretch/shrink */
+    align-self: center; /* align with text baseline */
+}
+
 .dropdown-item-right {
     color: white;
     background: none;

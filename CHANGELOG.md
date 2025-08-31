@@ -4,9 +4,30 @@ All notable changes to this project will be documented in this file.
 
 The format is inspired by Keep a Changelog and uses calendar dates. The project does not yet adhere to Semantic Versioning.
 
+## [0.1.5] - 2025-08-31
+### Added
+- Hidden title directive + ID for reasoning models: during thinking, emit exactly one line `TITLE: …`. It is parsed from the reasoning buffer and applied to `conversation.title` (never shown in the visible chat).
+- Streaming sanitization in `OpenChat/src/ai/stream_reasoning.js`: strips `TITLE:` and `ID: GEN_TITLE_…` lines in real time and from the final visible answer.
+- Title model cascade in `OpenChat/src/main.js`: candidate order `localStorage.titleModelCandidates` (CSV) → `titleModel` → currently selected non-reasoning model → lightweight defaults → backend default; with per-attempt timeout.
+
+### Changed
+- Title generation is triggered after each assistant completion (simple + reasoning), protected by 2s debounce, concurrency lock, and 8s timeout.
+- Prefer lightweight/non-reasoning models for titles; override via `localStorage.titleModel`/`titleModelCandidates`.
+- Response language selection for reasoning: based only on the latest user message; optional override `preferredLanguage` and toggle `disableLanguageDirective`.
+
+### Fixed
+- Error-like strings (e.g., Ollama 404/5xx, backend errors, timeouts) are no longer used as titles; a local fallback title is used instead.
+- Removed any leaked `TITLE:`/`ID:` from the final chat text and the reasoning dropdown.
+- Reduced false-positive language detection by raising the threshold in `OpenChat/src/ai/language_detection.js` from 0.5 to 0.65.
+
+### Known issues / Risks
+- Some reasoning models may ignore the hidden title directive or still surface internal markers. The sanitizer hides them, but rare edge cases may occur.
+- Title generation can fail if all candidate models/backends are unavailable; the UI will keep the local fallback title.
+- If no titles appear, explicitly set an available lightweight model, e.g., `localStorage.setItem('titleModel', 'llama3.1:8b')` or a CSV via `titleModelCandidates`.
+
 ## [0.1.2] - 2025-08-30
 ### Notice
-- Websearch ist vorübergehend deaktiviert, um das Risiko von Halluzinationen/Fehlinformationen zu reduzieren. Re-Enable folgt nach weiteren Stabilitätsprüfungen.
+- Websearch is temporarily disabled to reduce the risk of hallucinations/misinformation. It will be re-enabled after further stability checks.
 ### Changed
 - Frontend: extracted reasoning streaming into `OpenChat/src/ai/stream_reasoning.js`.
   - Handles reasoning live dropdown updates, final instant render, watchdogs, and websearch trigger.
@@ -27,7 +48,7 @@ The format is inspired by Keep a Changelog and uses calendar dates. The project 
 - Helper naming differences could break enrichment if customized (expects `performWebSearch`, `formatWebResultsForPrompt`, `buildReasoningInstruction`).
  - Entering fullscreen can cause a one-time flash in the UI. Likely related to transitions or reflow during layout changes; to be investigated in `OpenChat/src/styles.css` and `OpenChat/src/main.js` scroll/FLIP logic.
  - There may be additional issues not yet discovered; please report anomalies to help stabilize this release.
- - Aufgrund der temporären Deaktivierung von Websearch funktionieren web-gestützte Antworten und Zitationshinweise nicht.
+ - Due to the temporary deactivation of websearch, web-backed answers and citation hints are not available.
 
 ## [0.1.1] - 2025-08-28
 ### Notice

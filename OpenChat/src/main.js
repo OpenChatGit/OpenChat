@@ -1,5 +1,7 @@
 import { streamSimpleResponse } from './ai/stream_simple.js';
 import { streamReasoningResponse } from './ai/stream_reasoning.js';
+import { buildPromptWithContext } from './ai/context_manager.js';
+import { answerFromHistoryIfApplicable } from './ai/history_answer.js';
  
 // Tauri API wrapper
 const invoke = async (command, args) => {
@@ -30,6 +32,178 @@ function restartOllamaPolling() {
         window.__ollamaStatusIntervalId = setInterval(updateOllamaCount, period);
     } catch {}
 }
+
+// Build a short prompt to ask the model for a concise conversation title
+function buildTitlePrompt(conversation) {
+    const msgs = (conversation?.messages || []);
+    // Use the last 8 messages for context, trim each for brevity
+    const recent = msgs.slice(-8).map(m => {
+        const role = m.role === 'assistant' ? 'Assistant' : 'User';
+        let content = (m.content || '').replace(/\s+/g, ' ').trim();
+        if (content.length > 240) content = content.slice(0, 240) + '…';
+        return `${role}: ${content}`;
+    }).join('\n');
+
+    // Instruction: return only a short, descriptive title
+    const instruction = (
+        'You will receive a short excerpt of a chat. '
+        + 'Generate a concise, descriptive chat title that best reflects the overall topic.\n'
+        + '- Keep it under 6 words.\n'
+        + '- No surrounding quotes.\n'
+        + '- No trailing punctuation.\n'
+        + '- Output ONLY the title text.'
+    );
+
+    return `${instruction}\n\n[Conversation]\n${recent}`;
+}
+
+// Cheap local fallback if the model is slow/unavailable
+function buildFallbackTitle(conversation) {
+    if (!conversation || !Array.isArray(conversation.messages)) return 'New Chat';
+    // Prefer last user message; otherwise last assistant
+    const msgs = [...conversation.messages].reverse();
+    const userMsg = msgs.find(m => m.role === 'user' && m.content && m.content.trim());
+    const lastMsg = userMsg || msgs.find(m => m.content && m.content.trim());
+    let text = (lastMsg?.content || '').replace(/\s+/g, ' ').trim();
+    if (!text) return 'New Chat';
+    // Strip markdown fences/headers for cleanliness
+    text = text.replace(/^```[\s\S]*?```/g, '').replace(/^#+\s*/gm, '');
+    // Keep it short
+    if (text.length > 64) text = text.slice(0, 64).trim();
+    // Remove trailing punctuation/quotes
+    text = text.replace(/["'`\-:;,.!?\s]+$/g, '').trim();
+    return text || 'New Chat';
+}
+
+// Request a model-generated title and update the sidebar if it differs (safe, debounced, with timeout)
+async function requestAIGeneratedTitle(conversation) {
+    try {
+        // Basic guards
+        if (!conversation || !Array.isArray(conversation.messages)) return;
+
+        // Prevent overlapping calls per conversation
+        if (conversation.__titleBusy) return;
+
+        // Debounce: skip if we recently tried (within 2s)
+        const now = Date.now();
+        if (conversation.__lastTitleAt && (now - conversation.__lastTitleAt) < 2000) return;
+
+        // Previously: only on initial title or every 10 messages. That proved too restrictive.
+        // New policy: allow on each assistant completion, but debounce ensures it won't spam.
+
+        conversation.__titleBusy = true;
+        conversation.__lastTitleAt = now;
+
+        const prompt = buildTitlePrompt(conversation);
+        // Resolve a reliable model for titles using a candidate cascade
+        const resolveTitleModels = () => {
+            const list = [];
+            try {
+                // Highest priority: explicit override list (CSV)
+                const csv = localStorage.getItem('titleModelCandidates');
+                if (csv && csv.trim()) {
+                    csv.split(',').map(s=>s.trim()).filter(Boolean).forEach(m=>list.push(m));
+                }
+                // Next: single override
+                const override = localStorage.getItem('titleModel');
+                if (override && override.trim()) list.push(override.trim());
+            } catch {}
+            // If selected model is non-reasoning, try it too
+            try {
+                if (selectedOllamaModel && (!isReasoningModelName || !isReasoningModelName(selectedOllamaModel))) {
+                    list.push(selectedOllamaModel);
+                }
+            } catch {}
+            // Add common light models as last resort (best-effort; they may or may not exist)
+            ['llama3.1:8b','llama3:8b','qwen2.5:7b','phi3:3.8b','mistral:7b'].forEach(m=>list.push(m));
+            // Finally, undefined to let backend pick a default
+            list.push(undefined);
+            // De-duplicate while preserving order
+            return Array.from(new Set(list));
+        };
+
+        const withTimeout = (p, ms) => new Promise((resolve, reject) => {
+            const t = setTimeout(() => reject(new Error(`title-timeout-${ms}ms`)), ms);
+            p.then(v => { clearTimeout(t); resolve(v); }).catch(err => { clearTimeout(t); reject(err); });
+        });
+
+        const tryGenerate = async (mdl) => {
+            try {
+                console.debug('[title] trying model:', mdl || '(default)');
+                return await withTimeout(invoke('generate_ai_response', { message: prompt, model: mdl }), 6000);
+            } catch (e) {
+                console.debug('[title] model failed:', mdl || '(default)', e?.message || e);
+                throw e;
+            }
+        };
+
+        const candidates = resolveTitleModels();
+        let result = '';
+        for (const mdl of candidates) {
+            try {
+                result = await tryGenerate(mdl);
+                if (result && String(result).trim()) { break; }
+            } catch { /* try next */ }
+        }
+
+        if (!result || !String(result).trim()) throw new Error('empty-title-result');
+        let title = String(result || '').trim();
+        // Post-process: keep it to a single line and short
+        title = title.split(/\r?\n/)[0].trim();
+        if (title.length > 64) title = title.slice(0, 64).trim();
+        // Avoid empty or fallback/error-like responses
+        const lower = title.toLowerCase();
+        const looksHttpCode = /\b(4\d\d|5\d\d)\b/.test(lower);
+        const looksError = (
+            lower.includes('error') || lower.includes('fehler') || lower.includes('timeout') ||
+            lower.includes('backend not available') || lower.includes('not found') ||
+            lower.includes('ollama') || lower.includes('tauri') || looksHttpCode ||
+            lower.includes('leere antwort')
+        );
+        if (title && !looksError) {
+            if (conversation.title !== title) {
+                conversation.title = title;
+                updateConversationList();
+                console.debug('[title] updated:', title);
+            }
+        } else if (looksError) {
+            // Replace error-like titles with a safe local fallback so the sidebar doesn't show errors
+            const fallback = buildFallbackTitle(conversation);
+            const currentLower = String(conversation.title || '').toLowerCase();
+            const currentLooksHttp = /\b(4\d\d|5\d\d)\b/.test(currentLower);
+            const currentLooksError = (
+                currentLower.includes('error') || currentLower.includes('fehler') || currentLower.includes('timeout') ||
+                currentLower.includes('backend not available') || currentLower.includes('not found') ||
+                currentLower.includes('ollama') || currentLower.includes('tauri') || currentLooksHttp ||
+                currentLower.includes('leere antwort')
+            );
+            if (!conversation.title || currentLooksError) {
+                conversation.title = fallback;
+                updateConversationList();
+                console.debug('[title] replaced error with fallback:', fallback);
+            }
+        }
+    } catch (e) {
+        // Silent fail: never disrupt UI/streaming
+        console.debug('Title generation skipped/failed:', e?.message || e);
+    } finally {
+        // If not updated, apply a quick local fallback so it's never blank
+        try {
+            if (!conversation.title || !conversation.title.trim()) {
+                const fallback = buildFallbackTitle(conversation);
+                if (fallback && fallback !== conversation.title) {
+                    conversation.title = fallback;
+                    updateConversationList();
+                    console.debug('[title] fallback set:', fallback);
+                }
+            }
+        } catch {}
+        try { conversation.__titleBusy = false; } catch {}
+    }
+}
+
+// Expose for streaming modules to call after assistant finishes
+try { window.requestAIGeneratedTitle = requestAIGeneratedTitle; } catch {}
 
 // Warm the currently selected model to reduce first-token latency
 async function warmModel(modelName) {
@@ -348,6 +522,8 @@ class MessageInputManager {
         this.messageInput.addEventListener('input', () => this.autoResize());
         this.messageInput.addEventListener('keydown', (e) => this.handleKeyDown(e));
         this.messageInput.addEventListener('input', () => this.updateSendButton());
+        // Ensure pasting from web/apps inserts plain text, preserves line breaks, and keeps caret
+        this.messageInput.addEventListener('paste', (e) => this.handlePaste(e));
         
         this.chatForm.addEventListener('submit', (e) => this.handleSubmit(e));
         
@@ -372,6 +548,30 @@ class MessageInputManager {
                 this.chatForm.dispatchEvent(new Event('submit'));
             }
         }
+    }
+
+    handlePaste(e) {
+        try {
+            const dt = e.clipboardData || window.clipboardData;
+            if (!dt) return; // default behavior
+            const text = dt.getData('text/plain');
+            if (!text) return;
+            e.preventDefault();
+            const el = this.messageInput;
+            const start = el.selectionStart ?? el.value.length;
+            const end = el.selectionEnd ?? el.value.length;
+            // Normalize line endings and limit extremely large pastes
+            const MAX_PASTE = 100000; // 100k chars hard cap to protect UI
+            let insert = text.replace(/\r\n/g, '\n');
+            if (insert.length > MAX_PASTE) insert = insert.slice(0, MAX_PASTE);
+            el.value = el.value.slice(0, start) + insert + el.value.slice(end);
+            const caret = start + insert.length;
+            // Restore caret
+            try { el.setSelectionRange(caret, caret); } catch {}
+            // Update UI
+            this.autoResize();
+            this.updateSendButton();
+        } catch {}
     }
 
     async handleSubmit(e) {
@@ -450,22 +650,46 @@ async function sendMessage(messageContent) {
     conversation.updated_at = new Date();
     updateConversationList();
 
-    // Update conversation title if it's the first message
+    // Deterministic history recall: short-circuit for questions about prior messages
+    try {
+        const historyAnswer = answerFromHistoryIfApplicable(conversation, messageContent);
+        if (historyAnswer) {
+            const aiMessage = { role: 'assistant', content: historyAnswer, timestamp: new Date() };
+            conversation.messages.push(aiMessage);
+            conversation.updated_at = new Date();
+            updateConversationList();
+            await displayMessageWithTypewriter(aiMessage);
+            return; // Do not call the model
+        }
+    } catch {}
+
+    // Display user message
+    displayMessage(userMessage);
     if (conversation.messages.length === 1) {
         conversation.title = messageContent.substring(0, 50) + (messageContent.length > 50 ? '...' : '');
         // Reflect new title right away
         updateConversationList();
     }
     
-    // Display user message
-    displayMessage(userMessage);
-    
     // Generate AI response using Tauri backend
     try {
         // If Web Search tool is active, add tool-aware instruction so models know they can use it
         const toolAware = (activeTools && activeTools.has && activeTools.has('websearch')) ? buildToolAwareInstruction() : '';
         const reasoningAware = (ENABLE_INTERNAL_REASONING_PROMPT && isReasoningModelActive()) ? buildReasoningInstruction() : '';
-        let finalPrompt = messageContent + toolAware + reasoningAware;
+        // Build context-aware prompt including prior relevant turns
+        let finalPrompt = buildPromptWithContext(conversation, messageContent, {
+            maxChars: 8000,
+            systemPreamble: undefined, // use default preamble in context manager
+            toolAware,
+            reasoningAware
+        });
+        // Debug preview to verify context inclusion (trimmed to avoid flooding console)
+        try {
+            const head = finalPrompt.slice(0, 800);
+            const tail = finalPrompt.length > 300 ? finalPrompt.slice(-300) : '';
+            console.debug('[prompt head]\n' + head);
+            if (tail) console.debug('[prompt tail]\n' + tail);
+        } catch {}
 
         // Show thinking animation (reasoning UI only if a reasoning model is active)
         showThinkingAnimation();
@@ -1151,19 +1375,18 @@ async function toggleOllamaMenu(event) {
             };
             const left = document.createElement('div');
             left.className = 'dropdown-item-left';
-            // Remove robot icon; show plain model name
-            left.textContent = m.name;
-            // Annotate reasoning models for clarity
+            // Model name element
+            const nameEl = document.createElement('span');
+            nameEl.className = 'model-name';
+            nameEl.textContent = m.name;
+            left.appendChild(nameEl);
+            // Optional compact reasoning badge
             const reasoning = isReasoningModelName(m.name);
             if (reasoning) {
                 const badge = document.createElement('span');
-                badge.textContent = ' (reasoning)';
-                badge.style.opacity = '0.8';
-                badge.style.fontSize = '0.9em';
-                badge.style.marginLeft = '4px';
+                badge.className = 'reasoning-badge';
+                badge.textContent = 'Reasoning';
                 left.appendChild(badge);
-            } else {
-                // No tooltip
             }
             row.appendChild(left);
 
@@ -1211,7 +1434,7 @@ function selectModelByName(modelName) {
     const submenu = menu?.querySelector('.main-title-submenu');
     if (submenu) {
         submenu.querySelectorAll('.dropdown-item').forEach(row => {
-            const name = row.querySelector('.dropdown-item-left')?.textContent?.trim();
+            const name = row.querySelector('.model-name')?.textContent?.trim();
             const right = row.querySelector('.dropdown-item-right') || (() => {
                 const r = document.createElement('div');
                 r.className = 'dropdown-item-right';

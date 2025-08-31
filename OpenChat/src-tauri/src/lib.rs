@@ -9,12 +9,12 @@ use std::time::{Duration, Instant};
 lazy_static::lazy_static! {
     static ref HTTP_CLIENT: reqwest::Client = reqwest::Client::builder()
         .tcp_nodelay(true)
-        .timeout(Duration::from_secs(120))
+        .timeout(Duration::from_secs(600))
         .build()
         .expect("init async http client");
     static ref HTTP_CLIENT_BLOCKING: reqwest::blocking::Client = reqwest::blocking::Client::builder()
         .tcp_nodelay(true)
-        .timeout(Duration::from_secs(60))
+        .timeout(Duration::from_secs(300))
         .build()
         .expect("init blocking http client");
 }

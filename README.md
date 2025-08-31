@@ -6,57 +6,63 @@ Local-first desktop chat app built with Tauri and vanilla HTML/CSS/JS. Fast UX, 
 
 
 ## Features
-- **Reasoning streaming (new)**: Live reasoning updates in a dropdown, final answer renders instantly. Implemented in `OpenChat/src/ai/stream_reasoning.js`.
-- **Non-reasoning streaming**: Smooth typewriter effect at 10 ms/char (fast) via `OpenChat/src/ai/stream_simple.js`.
-- **Responsive first message UX**: Instant render of user message and “Thinking…” indicator.
-- **Clean UI**: Minimal thinking indicator with shimmer, centered welcome layout, custom overlay scrollbar.
-- **Conversations sidebar**: Titles/timestamps update live; rename/delete with confirm.
-- **Local Ollama via Tauri**: Native streaming with `generate_ai_response_stream` and events (`ai_token`, `ai_done`, `ai_error`).
-- **Theming tokens**: Dark-first; light theme variables ready.
+- Reasoning streaming: live reasoning in a dropdown; final answer renders instantly (`OpenChat/src/ai/stream_reasoning.js`).
+- Non-reasoning streaming: smooth typewriter at ~10 ms/char (`OpenChat/src/ai/stream_simple.js`).
+- Fast first-message UX: user message and “Thinking…” indicator render instantly.
+- Clean UI: minimal thinking indicator, centered welcome, custom overlay scrollbar.
+- Sidebar: live titles/timestamps; rename/delete with confirmation.
+- Local Ollama via Tauri: native streaming via `generate_ai_response_stream` and events (`ai_token`, `ai_done`, `ai_error`).
+- Title generation: lightweight model cascade and hidden directive for reasoning models (see Configuration below).
+- Theming tokens: dark-first; light theme variables ready.
 
 
 ## Project Structure
 - `OpenChat/src/` — Frontend (HTML, CSS, JS)
-  - `index.html` — Main UI markup
-  - `styles.css` — Global styles (overlay scrollbar, layout, animations)
-  - `main.js` — App logic and routing for simple vs. reasoning streaming
-  - `ai/stream_simple.js` — Non-reasoning streaming (typewriter)
-  - `ai/stream_reasoning.js` — Reasoning streaming (live dropdown + instant final)
+  - `index.html` — main UI markup
+  - `styles.css` — global styles (overlay scrollbar, layout, animations)
+  - `main.js` — app logic and routing for simple vs. reasoning streaming
+  - `ai/stream_simple.js` — non-reasoning streaming (typewriter)
+  - `ai/stream_reasoning.js` — reasoning streaming (live dropdown + instant final)
 - `OpenChat/src-tauri/` — Tauri backend (Ollama streaming, websearch cmd, warmup)
-- `templates/`, `static/`, `app.py`, `main.py` — Additional files (not required for Tauri app)
+- `templates/`, `static/`, `app.py`, `main.py` — additional files (not required for the Tauri app)
 
 
 ## Requirements
 - Windows (tested). macOS/Linux should also work per Tauri prerequisites.
 - Rust toolchain (stable) and Tauri CLI
 - Node.js optional (tooling only)
-- Optional: **Ollama** running locally for model-backed responses
+- Optional: Ollama running locally for model-backed responses
 
 
-## Setup (Windows)
-1. Install Rust and Tauri dependencies
+## Quick Start (Windows)
+1. Install Rust and Tauri prerequisites
    - Rust: https://www.rust-lang.org/tools/install
-   - Tauri prerequisites: https://tauri.app/start/prerequisites/
-   - Install the Tauri CLI:
+   - Tauri: https://tauri.app/start/prerequisites/
+   - Tauri CLI:
      ```powershell
      cargo install tauri-cli
      ```
-2. (Optional) Install Node.js LTS from https://nodejs.org/
-3. (Optional) Install and run Ollama locally: https://ollama.com/
+2. (Optional) Install Node.js LTS: https://nodejs.org/
+3. (Optional) Install and run Ollama: https://ollama.com/
+4. Run the app (dev):
+   ```powershell
+   cargo tauri dev --manifest-path .\OpenChat\src-tauri\Cargo.toml
+   ```
+
+## Setup (Windows)
+If you prefer running from the `OpenChat` folder directly, set your working directory there and use:
+
+```powershell
+cargo tauri dev
+```
 
 
 ## Run the App
-From the project root:
+From the repository root:
 
 ```powershell
 # Start the Tauri app (dev)
 cargo tauri dev --manifest-path .\OpenChat\src-tauri\Cargo.toml
-```
-
-If you prefer running from the `OpenChat` folder directly, ensure your working directory is set there and use:
-
-```powershell
-cargo tauri dev
 ```
 
 Build a release bundle:
@@ -67,22 +73,32 @@ cargo tauri build --manifest-path .\OpenChat\src-tauri\Cargo.toml
 
 
 ## Usage
-- **Start a new chat**: Click “New chat” (compose) in the sidebar or begin typing in the centered input.
+- **Start a new chat**: Click New chat in the sidebar or start typing in the centered input.
 - **Send a message**: Press Enter to send (Shift+Enter for newline). Your message appears instantly.
-- **Thinking**: The app shows a shimmering “Thinking…” text while the assistant generates a reply.
+- **Thinking**: A shimmering “Thinking…” text is shown while the assistant generates a reply.
 - **View/rename/delete chats**: Hover a conversation in the sidebar for actions. Deletion asks for confirmation.
-- **Model selection**: Open the main title dropdown, choose Ollama, and pick an available local model.
+- **Model selection**: Use the top dropdown, choose Ollama, and pick an available local model.
 
 ### Reasoning vs. Non-Reasoning
-- If a reasoning model is selected, streaming runs via `stream_reasoning.js`:
+- Reasoning models (`OpenChat/src/ai/stream_reasoning.js`):
   - Live reasoning appears in a dropdown while generating.
-  - Final answer renders instantly (no typewriter) once `[FINAL]`/`</think>`/heading is detected.
-- For standard models, streaming uses `stream_simple.js` with fast typewriter (10 ms/char).
+  - Final answer renders instantly (no typewriter) once finalization is detected.
+- Standard models (`OpenChat/src/ai/stream_simple.js`): fast typewriter (~10 ms/char).
 
 
 ## Configuration
 - Selected Ollama model is saved in `localStorage` and restored between sessions.
-- Dark mode by default; light theme variables live in `styles.css`.
+- Dark mode by default; light theme variables are defined in `styles.css`.
+- Title generation
+  - For reasoning models, a hidden directive asks the model to emit `TITLE: …` during thinking; this is parsed and applied to the conversation (not shown in chat).
+  - A lightweight model cascade is used for titles when available.
+  - Override via localStorage (optional):
+    - `titleModel` — exact model name to use for titles
+    - `titleModelCandidates` — CSV of candidates to try in order
+- Language selection (reasoning)
+  - Based on the latest user message; optional overrides:
+    - `preferredLanguage` — force a language
+    - `disableLanguageDirective` — disable automatic language instruction
 
 ## Websearch status
 - Websearch is temporarily disabled to reduce hallucination risk. Features relying on it (web citations, enrichment) are inactive for now.
@@ -102,12 +118,19 @@ See the full history in [CHANGELOG.md](CHANGELOG.md).
 
 ## Troubleshooting
 - "Backend not available" in console: Run via Tauri (not a plain browser) so `invoke` calls work.
-- No Ollama models detected: Ensure `http://127.0.0.1:11434/api/tags` is reachable and Ollama is running.
-- Reasoning stream shows but flashes on fullscreen: known issue; being investigated in CSS (`styles.css`) and FLIP logic in `main.js`.
+- No Ollama models detected: Ensure `http://127.0.0.1:11434/api/tags` is reachable and Ollama is running locally.
+- Reasoning stream flashes on fullscreen: known issue under investigation (`styles.css`, FLIP logic in `main.js`).
 - Build issues on Windows: Re-check Tauri prerequisites (MSVC, WebView2) per official docs.
+- Titles not updating: set a lightweight model explicitly, e.g. in DevTools:
+  ```js
+  localStorage.setItem('titleModel', 'llama3.1:8b')
+  // or multiple candidates
+  localStorage.setItem('titleModelCandidates', 'llama3.1:8b,phi3:mini,qwen2:1.5b')
+  ```
 
 
 ## License
 This project is licensed under the PolyForm Noncommercial License 1.0.0. See `LICENSE.md` for details.
 
 Commercial use is not permitted under this license. To use OpenChat commercially, please contact the project owner to obtain a separate commercial license.
+

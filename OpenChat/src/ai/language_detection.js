@@ -56,6 +56,32 @@ function countScriptChars(text) {
   return counts;
 }
 
+// Remove code fences, inline code, URLs/emails, and trim noise
+function preprocess(raw) {
+  let text = String(raw || '');
+  // Strip code blocks and inline code
+  text = text.replace(/```[\s\S]*?```/g, ' ').replace(/`[^`]*`/g, ' ');
+  // Strip URLs/emails
+  text = text.replace(/https?:\/\/\S+/gi, ' ').replace(/[\w.+-]+@\w+\.[\w.+-]+/g, ' ');
+  // Collapse whitespace
+  text = text.replace(/\s+/g, ' ').trim();
+
+  // If first line is short and mostly ASCII, downweight it (common: brief English intro)
+  const lines = String(raw || '').split(/\r?\n/);
+  if (lines.length > 1) {
+    const first = lines[0];
+    const asciiRatio = first ? (first.replace(/[^\x00-\x7F]/g, '').length / Math.max(1, first.length)) : 1;
+    if (first.length <= 120 && asciiRatio > 0.9) {
+      // prefer the remainder for detection
+      const rest = lines.slice(1).join('\n');
+      if (rest.replace(/\s+/g, '').length > 40) {
+        text = rest;
+      }
+    }
+  }
+  return text;
+}
+
 function guessByScript(counts) {
   const entries = Object.entries(counts).sort((a,b)=>b[1]-a[1]);
   const [topScript, topCount] = entries[0] || ['Latin', 0];
@@ -78,12 +104,15 @@ function guessByScript(counts) {
 }
 
 function scoreLatin(text) {
-  const tokens = text.toLowerCase().split(/[^\p{L}]+/u);
+  const tokens = text.toLowerCase().split(/[^\p{L}]+/u).filter(Boolean);
+  const freq = new Map();
+  for (const t of tokens) freq.set(t, (freq.get(t) || 0) + 1);
   const scores = {};
   for (const [code, words] of Object.entries(STOPWORDS)) {
     let s = 0;
-    for (const w of words) if (tokens.includes(w)) s += 1;
-    scores[code] = s / Math.max(1, Math.min(tokens.length, 50));
+    for (const w of words) s += (freq.get(w) || 0);
+    // normalize by token count with mild smoothing
+    scores[code] = s / Math.max(20, tokens.length);
   }
   // diacritics hints
   const t = text;
@@ -98,12 +127,17 @@ function scoreLatin(text) {
 
   const ranked = Object.entries(scores).sort((a,b)=>b[1]-a[1]);
   const [bestCode, bestScore] = ranked[0] || ['en', 0];
-  const confidence = Math.min(1, bestScore + 0.4);
+  const second = ranked[1] || ['en', 0];
+  const delta = bestScore - (second[1] || 0);
+  let confidence = Math.min(1, bestScore + 0.45);
+  // If top is only slightly better than second, lower confidence
+  if (delta < 0.08) confidence = Math.min(confidence, 0.45 + delta);
   return { code: bestCode, confidence };
 }
 
 export function detectLanguage(text) {
-  const input = (text || '').trim();
+  const raw = (text || '').trim();
+  const input = preprocess(raw);
   if (!input) {
     const nav = (navigator && navigator.language || 'en').slice(0,2).toLowerCase();
     return { code: nav, name: CODE_TO_NAME[nav] || 'Unknown', script: 'Latin', confidence: 0.2 };
@@ -134,9 +168,14 @@ export function detectLanguage(text) {
 
 export function chooseResponseLanguage(userText, fallback = 'en') {
   const det = detectLanguage(userText);
-  if (!det || det.code === 'und') return fallback;
-  // fall back to en for very low confidence
-  return det.confidence >= 0.4 ? det.code : (fallback || 'en');
+  let fb = fallback || 'en';
+  try {
+    const pref = localStorage.getItem('preferredLanguage');
+    if (pref && CODE_TO_NAME[pref]) fb = pref;
+  } catch {}
+  if (!det || det.code === 'und') return fb;
+  // require slightly higher confidence; otherwise fallback
+  return det.confidence >= 0.65 ? det.code : fb;
 }
 
 export function languageNameFromCode(code) {

@@ -1,5 +1,7 @@
 // Reasoning streaming module
 import { chooseResponseLanguage, languageNameFromCode } from './language_detection.js';
+import { buildPromptWithContext } from './context_manager.js';
+import { answerFromHistoryIfApplicable } from './history_answer.js';
 // Handles reasoning models: live reasoning dropdown + final instant render
 // Usage:
 //   streamReasoningResponse({
@@ -40,6 +42,7 @@ export async function streamReasoningResponse({ finalPrompt, originalUserMessage
 
   let buffer = '';
   let fullText = '';
+  let titleCandidate = null;
   let finalMode = false;
   let reasoningStarted = false;
   let reasoningBuffer = '';
@@ -50,6 +53,18 @@ export async function streamReasoningResponse({ finalPrompt, originalUserMessage
   let watchdogTimer = null;
   let firstTokenTimer = null;
   const unlisteners = [];
+
+  // Remove any leaked internal TITLE or ID directive lines from the final visible answer
+  const sanitizeFinal = (text) => {
+    try {
+      let t = String(text || '');
+      // Drop lines that start with TITLE: or ID: GEN_TITLE_ ...
+      t = t.split(/\r?\n/).filter(line => !/^\s*TITLE\s*:/i.test(line) && !/^\s*ID\s*:\s*GEN_TITLE_/i.test(line)).join('\n');
+      return t.trim();
+    } catch {
+      return text;
+    }
+  };
 
   const cleanup = async () => {
     for (const un of unlisteners) {
@@ -73,7 +88,7 @@ export async function streamReasoningResponse({ finalPrompt, originalUserMessage
       if (closed) return;
       if (__tokenCount === 0) return;
       const gap = Date.now() - lastTokenAt;
-      if (gap > 8000) {
+      if (gap > 30000) {
         console.warn(`[reasoning] inter-token watchdog fired after ${gap}ms; finalizing with accumulated text`);
         clearWatchdog();
         onDone({ payload: fullText });
@@ -83,10 +98,10 @@ export async function streamReasoningResponse({ finalPrompt, originalUserMessage
     firstTokenTimer = setTimeout(() => {
       if (closed) return;
       if (__tokenCount === 0) {
-        console.warn('[reasoning] first-token watchdog fired; aborting');
+        console.warn('[reasoning] first-token watchdog fired (60s); aborting');
         onError({ payload: 'Timeout waiting for first token' });
       }
-    }, 12000);
+    }, 60000);
   };
   const clearWatchdog = () => { if (watchdogTimer) { clearInterval(watchdogTimer); watchdogTimer = null; } };
 
@@ -96,13 +111,13 @@ export async function streamReasoningResponse({ finalPrompt, originalUserMessage
   const STREAM_RENDER_INTERVAL_MS = 50;
   const STREAM_MIN_DELTA_CHARS = 12;
 
-  const HAS_MARKERS_RE = /[\[<【】]|Output\s+Format|WEBSEARCH:/i;
+  const HAS_MARKERS_RE = /[\[<【】]|Output\s+Format|WEBSEARCH:|^\s*TITLE\s*:|^\s*ID\s*:\s*GEN_TITLE_/im;
   const stripMarkers = (text) => {
     if (!text) return text;
     if (!HAS_MARKERS_RE.test(text)) return text;
     return text
-      .replace(/<\/?\s*think\s*>/gi, '')
-      .replace(/<\/?\s*final\s*>/gi, '')
+      .replace(/<\/?>\s*think\s*>/gi, '')
+      .replace(/<\/?>\s*final\s*>/gi, '')
       .replace(/\[\s*REASONING[^\]]*\]/gi, '')
       .replace(/\[\s*FINAL[^\]]*\]/gi, '')
       .replace(/\[\s*THINK[^\]]*\]/gi, '')
@@ -113,6 +128,9 @@ export async function streamReasoningResponse({ finalPrompt, originalUserMessage
       .replace(/\[\s*Output\s+Format\s*\]/gi, '')
       .replace(/If you need web data, you may first reply with WEBSEARCH:\s*<query>.*?(?:\r?\n|$)/gi, '')
       .replace(/```[\s\S]*?\[\s*Output\s+Format\s*\][\s\S]*?```/gi, '')
+      // Remove leaked internal title/id lines from any partial chunk
+      .replace(/^\s*TITLE\s*:.*(?:\r?\n|$)/gim, '')
+      .replace(/^\s*ID\s*:\s*GEN_TITLE_.*(?:\r?\n|$)/gim, '')
       .replace(/[【】]/g, '');
   };
 
@@ -157,12 +175,35 @@ export async function streamReasoningResponse({ finalPrompt, originalUserMessage
         const query = m && m[1] ? m[1].trim() : originalUserMessage;
         const webResults = await tools.performWebSearch(query || originalUserMessage, 5);
         const extra = typeof tools.buildReasoningInstruction === 'function' ? tools.buildReasoningInstruction() : '';
-        const enriched = originalUserMessage + (typeof tools.formatWebResultsForPrompt === 'function' ? tools.formatWebResultsForPrompt(webResults) : '') + extra;
+        const enrichedUser = (originalUserMessage || '') + (typeof tools.formatWebResultsForPrompt === 'function' ? tools.formatWebResultsForPrompt(webResults) : '') + extra;
         buffer = '';
         fullText = '';
         reasoningStarted = false;
         await setupTauriListeners();
-        await startStream(enriched);
+        // Rebuild a full context-aware prompt
+        let rebuilt = buildPromptWithContext(conversation, enrichedUser, { maxChars: 8000 });
+        // Language directive: derive strictly from the latest user message; allow disable/override
+        try {
+          const disable = localStorage.getItem('disableLanguageDirective') === 'true';
+          let override = localStorage.getItem('preferredLanguage');
+          override = override && override.trim() ? override.trim() : null;
+          if (!disable) {
+            const lastUser = [...conversation.messages].reverse().find(m => m.role === 'user' && m.content);
+            const basis = lastUser?.content || originalUserMessage || '';
+            const code = override || chooseResponseLanguage(basis, 'en');
+            const name = languageNameFromCode(code);
+            const directive = `Please respond exclusively in ${name} (${code}).\n`;
+            rebuilt = `${directive}${rebuilt}`;
+          }
+        } catch {}
+
+        // Hidden title directive for reasoning models (emit only in reasoning, not in final)
+        try {
+          const genId = `GEN_TITLE_${Date.now()}`;
+          const titleInstr = 'While thinking, craft a concise chat title (<=6 words, no quotes, no ending punctuation). Output exactly one line starting with "TITLE: " followed by the title in your hidden reasoning ONLY; do not include the title in the final user-visible answer.';
+          rebuilt = `${titleInstr}\nID:${genId}\n${rebuilt}`;
+        } catch {}
+        await startStream(rebuilt);
         return;
       }
     }
@@ -254,7 +295,35 @@ export async function streamReasoningResponse({ finalPrompt, originalUserMessage
 
     try { ui.hideThinking?.(); } catch {}
 
-    const aiMessage = { role: 'assistant', content: finalOnly, reasoning: null, timestamp: new Date() };
+    // Strict recall override: if the last user message is a recall question, bypass model output
+    try {
+      const lastUser = [...(conversation?.messages || [])].reverse().find(m => m.role === 'user');
+      const recall = answerFromHistoryIfApplicable(conversation, lastUser?.content || '');
+      if (recall) {
+        finalOnly = recall;
+      }
+    } catch {}
+
+    // Anti-repetition safeguard: avoid echoing the previous assistant reply
+    try {
+      const lastAssistant = [...(conversation?.messages || [])].reverse().find(m => m.role === 'assistant');
+      const lastUser = [...(conversation?.messages || [])].reverse().find(m => m.role === 'user');
+      const sameAsPrev = lastAssistant && typeof lastAssistant.content === 'string' && lastAssistant.content.trim() === (finalOnly||'').trim();
+      if (sameAsPrev) {
+        const u = (lastUser?.content || '').toLowerCase();
+        if (/how\s+do\s+you\s+know|woher\s+weißt\s+du/.test(u)) {
+          const idx = (conversation.messages || []).findIndex(m => m === lastAssistant);
+          const turnNum = idx >= 0 ? (idx + 1) : null;
+          const expl = turnNum ? `I used the conversation history. It matches my earlier reply at turn ${turnNum}.` : 'I used the conversation history to answer.';
+          finalOnly = `${expl}\n\nHere is the exact quote from the conversation:\n\n"""\n${lastAssistant.content}\n"""`;
+        } else {
+          finalOnly = `Repeating prior answer once for clarity:\n\n"""\n${lastAssistant.content}\n"""`;
+        }
+      }
+    } catch {}
+
+  const cleanFinal = sanitizeFinal(finalOnly);
+  const aiMessage = { role: 'assistant', content: cleanFinal, reasoning: null, timestamp: new Date() };
     conversation.messages.push(aiMessage);
     try {
       // Reasoning models: render instantly (no typewriter)
@@ -263,6 +332,47 @@ export async function streamReasoningResponse({ finalPrompt, originalUserMessage
       conversation.updated_at = new Date();
       try { ui.updateConversationList?.(); } catch {}
       if (window.__cancelActiveStream === cancelThisStream) window.__cancelActiveStream = null;
+      // Try to extract a TITLE: ... line from the full reasoning buffer
+      try {
+        const text = String(fullText || '');
+        const m = text.match(/(?:^|\n)\s*TITLE:\s*(.+)/i);
+        if (m && m[1]) {
+          titleCandidate = m[1].trim();
+        }
+        if (titleCandidate) {
+          let t = titleCandidate.split(/\r?\n/)[0].trim();
+          if (t.length > 64) t = t.slice(0, 64).trim();
+          const lower = t.toLowerCase();
+          const looksHttp = /\b(4\d\d|5\d\d)\b/.test(lower);
+          const looksError = lower.includes('error') || lower.includes('fehler') || lower.includes('timeout') || lower.includes('ollama') || lower.includes('tauri') || looksHttp;
+          if (t && !looksError) {
+            if (!conversation.title || conversation.title !== t) {
+              conversation.title = t;
+              ui.updateConversationList?.();
+            }
+          }
+        }
+      } catch {}
+      // Ensure we never leave the title empty
+      try {
+        if (!conversation.title || !conversation.title.trim()) {
+          const lastUser = [...conversation.messages].reverse().find(m => m.role === 'user' && m.content);
+          if (lastUser && lastUser.content) {
+            const snippet = lastUser.content.slice(0, 50) + (lastUser.content.length > 50 ? '...' : '');
+            if (snippet.trim()) {
+              conversation.title = snippet.trim();
+              ui.updateConversationList?.();
+            }
+          }
+        }
+      } catch {}
+      // Fire-and-forget: refresh AI-generated title after assistant finished
+      try {
+        const shouldEvery10 = (conversation.messages?.length || 0) % 10 === 0;
+        if (typeof window.requestAIGeneratedTitle === 'function' && (shouldEvery10 || true)) {
+          Promise.resolve(window.requestAIGeneratedTitle(conversation)).catch(()=>{});
+        }
+      } catch {}
     }
   };
 
@@ -292,6 +402,8 @@ export async function streamReasoningResponse({ finalPrompt, originalUserMessage
     const invoke = tauri?.core?.invoke || tauri?.invoke;
     if (!invoke) throw new Error('Tauri invoke not available');
     try {
+      // Best-effort warm to reduce first-token latency and avoid timeouts
+      try { await invoke('warm_model', { model: selectedModel || undefined }); } catch (e) { console.debug('[reasoning] warm_model failed or unavailable:', e?.message || e); }
       await invoke('generate_ai_response_stream', { message: prompt, model: selectedModel || undefined });
     } catch (e) {
       console.error('[reasoning] invoke generate_ai_response_stream failed:', e);
@@ -299,12 +411,26 @@ export async function streamReasoningResponse({ finalPrompt, originalUserMessage
     }
   };
 
-  // Detect user language and prepend directive to enforce response language
+  // Detect user language and prepend directive to enforce response language (latest user only; allow disable/override)
   try {
-    const code = chooseResponseLanguage(originalUserMessage || finalPrompt, 'en');
-    const name = languageNameFromCode(code);
-    const directive = `Please respond exclusively in ${name} (${code}).\n`;
-    finalPrompt = `${directive}${finalPrompt}`;
+    const disable = localStorage.getItem('disableLanguageDirective') === 'true';
+    let override = localStorage.getItem('preferredLanguage');
+    override = override && override.trim() ? override.trim() : null;
+    if (!disable) {
+      const lastUser = [...conversation.messages].reverse().find(m => m.role === 'user' && m.content);
+      const basis = lastUser?.content || originalUserMessage || '';
+      const code = override || chooseResponseLanguage(basis, 'en');
+      const name = languageNameFromCode(code);
+      const directive = `Please respond exclusively in ${name} (${code}).\n`;
+      finalPrompt = `${directive}${finalPrompt}`;
+    }
+  } catch {}
+
+  // Hidden title directive for reasoning models on initial prompt as well
+  try {
+    const genId = `GEN_TITLE_${Date.now()}`;
+    const titleInstr = 'While thinking, craft a concise chat title (<=6 words, no quotes, no ending punctuation). Output exactly one line starting with "TITLE: " followed by the title in your hidden reasoning ONLY; do not include the title in the final user-visible answer.';
+    finalPrompt = `${titleInstr}\nID:${genId}\n${finalPrompt}`;
   } catch {}
 
   await setupTauriListeners();
