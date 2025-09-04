@@ -1846,6 +1846,64 @@ body .chat-container.input-centered .input-area.centered {
     border: 0;
 }
 
+/* Assistant Variant Navigation (prev/next + counter) */
+.assistant-toolbar .variant-nav {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.02rem;
+    margin-left: 0;
+}
+
+.assistant-toolbar .variant-prev,
+.assistant-toolbar .variant-next {
+    background: transparent;
+    border: none;
+    color: var(--text-primary);
+    border-radius: 6px; /* slightly rounded corners, less than before */
+    width: auto; /* auto width to closely wrap icon */
+    height: 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease, opacity 0.15s ease;
+    padding: 0 2px; /* even narrower horizontal padding for tighter hover footprint */
+    margin: 0;
+}
+
+.assistant-toolbar .variant-prev:hover,
+.assistant-toolbar .variant-next:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+    color: var(--text-primary);
+}
+
+.assistant-toolbar .variant-prev:focus,
+.assistant-toolbar .variant-next:focus { 
+    outline: none !important; 
+    box-shadow: none !important; 
+}
+
+.assistant-toolbar .variant-prev img,
+.assistant-toolbar .variant-next img {
+    filter: brightness(0) invert(1);
+    width: 18px; /* adjust icon size to fit narrower width */
+    height: 18px;
+    pointer-events: none;
+}
+
+.assistant-toolbar .variant-counter {
+    color: var(--text-secondary);
+    font-size: 1rem;
+    font-weight: 500;
+    min-width: 0;
+    text-align: center;
+    margin: 0 0.02rem; /* bring even closer */
+    padding: 0;
+    pointer-events: none;
+    line-height: 1;
+}
+
 .message.assistant .message-content {
     position: relative;
 }

@@ -228,6 +228,15 @@ async function requestAIGeneratedTitle(conversation) {
 // Expose for streaming modules to call after assistant finishes
 try { window.requestAIGeneratedTitle = requestAIGeneratedTitle; } catch {}
 
+// Simple navigation helpers for Back/Forward buttons
+function goBack() {
+    try { history.back(); } catch {}
+}
+function goForward() {
+    try { history.forward(); } catch {}
+}
+try { window.goBack = goBack; window.goForward = goForward; } catch {}
+
 // Warm the currently selected model to reduce first-token latency
 async function warmModel(modelName) {
     const model = modelName || selectedOllamaModel || null;
@@ -427,6 +436,156 @@ let selectedOllamaModel = localStorage.getItem('selectedOllamaModel') || null;
 
 // Rendering helpers: Plain text by default, Markdown only if code is present
 let __md = null;
+
+// History navigation management
+let __suppressHistoryPush = false;
+let __inRegeneration = false;
+let __regenPrePushDone = false;
+
+// Lightweight in-app history debug logger (survives without devtools)
+function historyLog(event, payload = {}) {
+    try {
+        const entry = { t: new Date().toISOString(), event, ...payload };
+        if (!window.__historyLogs) window.__historyLogs = [];
+        window.__historyLogs.push(entry);
+        if (window.__historyLogs.length > 200) {
+            window.__historyLogs.splice(0, window.__historyLogs.length - 200);
+        }
+        try {
+            localStorage.setItem('historyLogs', JSON.stringify(window.__historyLogs));
+        } catch {}
+    } catch {}
+}
+
+async function copyHistoryLogsToClipboard() {
+    try {
+        const logs = window.__historyLogs || [];
+        const text = JSON.stringify(logs, null, 2);
+        if (navigator.clipboard?.writeText) {
+            await navigator.clipboard.writeText(text);
+            alert('History logs copied to clipboard (Ctrl+V to paste).');
+        } else {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed';
+            ta.style.left = '-9999px';
+            document.body.appendChild(ta);
+            ta.focus();
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            alert('History logs copied to clipboard (fallback).');
+        }
+    } catch (e) {
+        alert('Failed to copy history logs: ' + (e?.message || e));
+    }
+}
+
+// Create a lightweight deep snapshot of the current conversation's messages
+function getCurrentConversationSnapshot() {
+    try {
+        if (!currentConversationId) return null;
+        const convo = conversations[userId]?.[currentConversationId];
+        if (!convo || !Array.isArray(convo.messages)) return null;
+        // Shallow-clone objects per message and keep UI-necessary fields
+        return convo.messages.map(m => {
+            const base = {
+                role: m.role,
+                content: m.content,
+            };
+            // Preserve variant UI state for assistant messages
+            if (m.role === 'assistant') {
+                if (Array.isArray(m.__variants)) base.__variants = m.__variants.slice();
+                if (typeof m.__variantIndex === 'number') base.__variantIndex = m.__variantIndex;
+            }
+            return base;
+        });
+    } catch {
+        return null;
+    }
+}
+function getMessagesScrollTop() {
+    try {
+        const el = document.getElementById('messagesArea');
+        return el ? el.scrollTop : 0;
+    } catch { return 0; }
+}
+function pushChatHistoryState(extra = {}) {
+    if (__suppressHistoryPush) return;
+    const st = { conversationId: currentConversationId, scrollTop: getMessagesScrollTop(), messagesSnapshot: getCurrentConversationSnapshot(), ...extra };
+    try { history.pushState(st, '', '#'+(currentConversationId || '')); } catch {}
+    try {
+        const len = Array.isArray(st.messagesSnapshot) ? st.messagesSnapshot.length : 0;
+        console.debug('[history] push', { convo: currentConversationId, tag: extra?.__tag, msgs: len, scrollTop: st.scrollTop });
+        historyLog('history-push', { convo: currentConversationId, tag: extra?.__tag, msgs: len, scrollTop: st.scrollTop });
+    } catch {}
+}
+function replaceChatHistoryState(extra = {}) {
+    const st = { conversationId: currentConversationId, scrollTop: getMessagesScrollTop(), messagesSnapshot: getCurrentConversationSnapshot(), ...extra };
+    try { history.replaceState(st, '', '#'+(currentConversationId || '')); } catch {}
+    try {
+        const len = Array.isArray(st.messagesSnapshot) ? st.messagesSnapshot.length : 0;
+        console.debug('[history] replace', { convo: currentConversationId, tag: extra?.__tag, msgs: len, scrollTop: st.scrollTop });
+        historyLog('history-replace', { convo: currentConversationId, tag: extra?.__tag, msgs: len, scrollTop: st.scrollTop });
+    } catch {}
+}
+window.addEventListener('popstate', (e) => {
+    const st = e.state || {};
+    __suppressHistoryPush = true;
+    try {
+        const convoId = st.conversationId || null;
+        if (convoId && conversations[userId] && conversations[userId][convoId]) {
+            // Clear any inline insertion anchors before restoring from snapshot
+            try { __assistantInsertBeforeEl = null; } catch {}
+            try { __thinkingInsertBeforeEl = null; } catch {}
+            // If we have a messages snapshot from history, render that exact state
+            const override = Array.isArray(st.messagesSnapshot) ? st.messagesSnapshot : null;
+            try {
+                console.debug('[history] popstate -> restore', { convo: convoId, msgs: override ? override.length : 0, scrollTop: st.scrollTop });
+                historyLog('history-popstate-restore', { convo: convoId, msgs: override ? override.length : 0, scrollTop: st.scrollTop });
+            } catch {}
+            // Also sync the in-memory conversation to this snapshot so any logic that
+            // relies on conversation.messages (e.g., variant toolbars, subsequent updates)
+            // sees the full restored tail. Clone to avoid sharing references with render.
+            if (override) {
+                try {
+                    const convo = conversations[userId][convoId];
+                    convo.messages = override.map(m => ({ ...m }));
+                } catch {}
+            }
+            loadConversation(convoId, { fromPop: true, messagesOverride: override });
+            // Defensive: if messages did not render (race or suppression), force-render from snapshot
+            try {
+                const area = document.getElementById('messagesArea');
+                const rendered = area ? area.querySelectorAll('.message').length : 0;
+                if (rendered === 0 && Array.isArray(override) && override.length > 0) {
+                    console.debug('[history] popstate -> force-render snapshot because DOM is empty');
+                    historyLog('history-popstate-force-render', { convo: convoId, msgs: override.length });
+                    override.forEach(msg => displayMessage(msg, { fromPop: true }));
+                }
+            } catch {}
+        } else {
+            currentConversationId = null;
+            clearMessages();
+            const inputArea = document.querySelector('.input-area');
+            const messagesArea = document.getElementById('messagesArea');
+            const chatContainer = document.querySelector('.chat-container');
+            if (inputArea && messagesArea && chatContainer) {
+                inputArea.classList.add('centered');
+                messagesArea.classList.add('with-centered-input');
+                chatContainer.classList.add('input-centered');
+            }
+            updateConversationList();
+        }
+        // Restore scroll
+        if (typeof st.scrollTop === 'number') {
+            const el = document.getElementById('messagesArea');
+            if (el) el.scrollTop = st.scrollTop;
+        }
+    } finally {
+        __suppressHistoryPush = false;
+    }
+});
 // Suppress auto-scroll when regenerating earlier messages
 let __suppressAutoScroll = false;
 const shouldAutoScroll = () => !__suppressAutoScroll;
@@ -479,11 +638,99 @@ const renderMessageHTML = (text) => {
     }
 };
 
-// Create a small toolbar with a copy button and a regenerate button for assistant messages
+// Create a small toolbar with variant navigation, a copy button, and a regenerate button for assistant messages
 function createAssistantCopyToolbar(textToCopy, messageRef) {
     try {
         const toolbar = document.createElement('div');
         toolbar.className = 'assistant-toolbar';
+
+        // Helper: render the given text into the sibling content container (above the toolbar)
+        const renderVariantIntoDOM = (rootToolbarEl, text) => {
+            try {
+                const contentDiv = rootToolbarEl.closest('.message-content');
+                if (!contentDiv) return;
+                // First child is either the typewriter container (assistant typed) or the content wrapper
+                const firstChild = contentDiv.firstElementChild;
+                if (!firstChild) return;
+                const html = renderMessageHTML(text || '');
+                // If typewriter container exists, update its innerHTML, else update contentDiv directly
+                if (firstChild.classList.contains('typewriter-container')) {
+                    firstChild.innerHTML = html;
+                } else {
+                    // Replace entire content (but keep toolbar intact)
+                    // Remove all nodes before toolbar
+                    const children = Array.from(contentDiv.childNodes);
+                    for (const node of children) {
+                        if (node === rootToolbarEl) break;
+                        contentDiv.removeChild(node);
+                    }
+                    // Insert new container before toolbar
+                    const newContainer = document.createElement('div');
+                    newContainer.className = 'typewriter-container';
+                    newContainer.innerHTML = html;
+                    contentDiv.insertBefore(newContainer, rootToolbarEl);
+                }
+            } catch {}
+        };
+
+        // If this assistant message has variants, add prev/next controls like ChatGPT
+        const variants = (messageRef && Array.isArray(messageRef.__variants)) ? messageRef.__variants : null;
+        if (variants && variants.length > 1) {
+            if (typeof messageRef.__variantIndex !== 'number') {
+                messageRef.__variantIndex = variants.length - 1; // default to latest
+            }
+
+            const nav = document.createElement('div');
+            nav.className = 'variant-nav';
+
+            const prevBtn = document.createElement('button');
+            prevBtn.type = 'button';
+            prevBtn.className = 'variant-prev custom-tooltip';
+            prevBtn.setAttribute('aria-label', 'Zurück');
+            prevBtn.setAttribute('data-tooltip', 'Zurück');
+            prevBtn.setAttribute('tabindex', '-1');
+            prevBtn.innerHTML = '<img src="assets/chevron_backward.svg" alt="Zurück" width="16" height="16">';
+
+            const counter = document.createElement('span');
+            counter.className = 'variant-counter';
+            counter.textContent = `${messageRef.__variantIndex + 1}/${variants.length}`;
+
+            const nextBtn = document.createElement('button');
+            nextBtn.type = 'button';
+            nextBtn.className = 'variant-next custom-tooltip';
+            nextBtn.setAttribute('aria-label', 'Weiter');
+            nextBtn.setAttribute('data-tooltip', 'Weiter');
+            nextBtn.setAttribute('tabindex', '-1');
+            nextBtn.innerHTML = '<img src="assets/chevron_forward.svg" alt="Weiter" width="16" height="16">';
+
+            const applyIndex = (idx) => {
+                if (!variants) return;
+                // Cyclic navigation: wrap around both directions
+                const len = variants.length;
+                const wrapped = ((idx % len) + len) % len;
+                messageRef.__variantIndex = wrapped;
+                counter.textContent = `${wrapped + 1}/${len}`;
+                // Re-render the selected variant into the DOM without mutating conversation state
+                renderVariantIntoDOM(toolbar, variants[wrapped]);
+            };
+
+            prevBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                try { prevBtn.blur(); } catch {}
+                applyIndex((typeof messageRef.__variantIndex === 'number' ? messageRef.__variantIndex : (variants.length - 1)) - 1);
+            });
+
+            nextBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                try { nextBtn.blur(); } catch {}
+                applyIndex((typeof messageRef.__variantIndex === 'number' ? messageRef.__variantIndex : (variants.length - 1)) + 1);
+            });
+
+            nav.appendChild(prevBtn);
+            nav.appendChild(counter);
+            nav.appendChild(nextBtn);
+            toolbar.appendChild(nav);
+        }
 
         const btn = document.createElement('button');
         btn.type = 'button';
@@ -507,7 +754,13 @@ function createAssistantCopyToolbar(textToCopy, messageRef) {
         btn.appendChild(icon);
 
         const doCopy = async () => {
-            const plain = String(textToCopy || '');
+            // If variants exist, copy the currently visible variant; otherwise copy the provided text
+            const current = (messageRef && Array.isArray(messageRef.__variants))
+                ? messageRef.__variants[
+                    (typeof messageRef.__variantIndex === 'number') ? messageRef.__variantIndex : (messageRef.__variants.length - 1)
+                  ]
+                : textToCopy;
+            const plain = String(current || '');
             let ok = false;
             try {
                 if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -564,6 +817,13 @@ function createAssistantCopyToolbar(textToCopy, messageRef) {
             e.stopPropagation();
             try { regenBtn.blur(); } catch {}
             try {
+                // Pre-push a snapshot right at user click to guarantee full pre-regen state
+                try {
+                    const snap = getCurrentConversationSnapshot();
+                    __regenPrePushDone = true;
+                    pushChatHistoryState({ messagesSnapshot: snap, __tag: 'preclick-regenerate' });
+                    historyLog('preclick-regenerate-push', { convo: currentConversationId, msgs: Array.isArray(snap) ? snap.length : 0 });
+                } catch {}
                 await regenerateAssistantMessage(messageRef, regenBtn);
             } catch (err) {
                 // Tooltip feedback on error
@@ -586,10 +846,19 @@ async function regenerateAssistantMessage(messageRef, triggerEl) {
     const messagesArea = document.getElementById('messagesArea');
     const prevScrollTop = messagesArea ? messagesArea.scrollTop : null;
     __suppressAutoScroll = true;
+    __inRegeneration = true;
     try {
         const conversation = conversations[userId]?.[currentConversationId];
         if (!conversation || !Array.isArray(conversation.messages)) {
             return;
+        }
+        // Capture the current state so Back restores the full pre-regeneration tail
+        if (!__regenPrePushDone) {
+            try {
+                const preSnapshot = getCurrentConversationSnapshot();
+                pushChatHistoryState({ messagesSnapshot: preSnapshot, __tag: 'precut-regenerate' });
+                historyLog('precut-regenerate-push', { convo: currentConversationId, msgs: Array.isArray(preSnapshot) ? preSnapshot.length : 0 });
+            } catch {}
         }
         const idx = conversation.messages.indexOf(messageRef);
         if (idx === -1) return;
@@ -613,24 +882,45 @@ async function regenerateAssistantMessage(messageRef, triggerEl) {
             return;
         }
 
-        // Prepare DOM anchors before removing the old node
+        // Determine the old assistant DOM container
         const oldContainer = triggerEl?.closest?.('.message.assistant');
-        const insertBefore = oldContainer?.nextSibling || null;
-        __thinkingInsertBeforeEl = insertBefore;
-        __assistantInsertBeforeEl = insertBefore;
 
-        // Remove the old assistant message from the conversation and UI before regenerating
+        // Capture previous assistant content and any existing variants for regeneration UI
         const previousAssistantContent = messageRef?.content || '';
-        conversation.messages.splice(idx, 1);
+        try {
+            const prevList = Array.isArray(messageRef.__variants) && messageRef.__variants.length
+                ? messageRef.__variants.slice()
+                : [previousAssistantContent];
+            // Deduplicate and keep compact strings only
+            window.__regenCarryVariants = Array.from(new Set(prevList.filter(v => typeof v === 'string' && v.trim())));
+        } catch { window.__regenCarryVariants = [previousAssistantContent]; }
+
+        // 1) Drop all messages at and below the selected assistant from the conversation state
+        conversation.messages = conversation.messages.slice(0, idx);
         conversation.updated_at = new Date();
         updateConversationList();
-        if (oldContainer) oldContainer.remove();
 
-        // Build a limited context (prompt-only) with just the immediate preceding user message.
-        // We will still mutate the REAL conversation so that further regenerations keep working.
-        const contextOverrideMessages = [
-            { role: 'user', content: messageContent }
-        ];
+        // 2) Remove the assistant DOM node and everything below it from the UI
+        if (oldContainer) {
+            let cursor = oldContainer;
+            while (cursor) {
+                const next = cursor.nextSibling;
+                try { cursor.remove(); } catch {}
+                cursor = next;
+            }
+        }
+
+        // 3) Ensure new generation appends to the end (no inline anchors)
+        __thinkingInsertBeforeEl = null;
+        __assistantInsertBeforeEl = null;
+
+        // Build a full context override up to this point (pre-cut conversation).
+        // After the slice above, conversation.messages now contains all messages BEFORE the regenerated assistant.
+        // Provide the complete prior history so the backend can faithfully regenerate the tail.
+        const contextOverrideMessages = (conversation.messages || []).map(m => ({
+            role: m.role,
+            content: m.content
+        }));
 
         // Build a regeneration hint to promote diversity and avoid repeating the previous answer
         const prevTrim = (previousAssistantContent || '').slice(0, 800);
@@ -638,6 +928,8 @@ async function regenerateAssistantMessage(messageRef, triggerEl) {
 
         // Run the same generation flow used after sending a user message, without pushing a new user message
         // Pass the real conversation for mutation, but override prompt context for this call.
+        // Mark pending post-regenerate history push BEFORE generation so the renderer can finalize it
+        try { window.__pendingPostRegeneratePush = true; } catch {}
         await generateAssistantFromContent(messageContent, conversation, {
             additionalInstruction: regenerationHint,
             contextOverrideMessages
@@ -655,6 +947,9 @@ async function regenerateAssistantMessage(messageRef, triggerEl) {
         __thinkingInsertBeforeEl = null;
         // Do not clear __assistantInsertBeforeEl here; it should be cleared by the rendering
         // function (e.g., displayMessageWithTypewriter) once the async animation completes.
+        __inRegeneration = false;
+        __regenPrePushDone = false;
+        // Flag already set before generation; nothing to do here
     }
 }
 
@@ -1134,6 +1429,50 @@ async function sendMessage(messageContent) {
     }
     
     const conversation = conversations[userId][currentConversationId];
+    // Commit-on-send: if the most recent assistant message has regeneration variants,
+    // commit the currently selected variant to content and prune the others.
+    try {
+        if (conversation && Array.isArray(conversation.messages) && conversation.messages.length) {
+            for (let i = conversation.messages.length - 1; i >= 0; i--) {
+                const m = conversation.messages[i];
+                if (m && m.role === 'assistant' && Array.isArray(m.__variants) && m.__variants.length) {
+                    const len = m.__variants.length;
+                    const idx = (typeof m.__variantIndex === 'number')
+                        ? ((m.__variantIndex % len) + len) % len
+                        : (len - 1);
+                    const committed = String(m.__variants[idx] ?? m.content ?? '');
+                    m.content = committed;
+                    try { delete m.__variants; } catch {}
+                    try { delete m.__variantIndex; } catch {}
+                    // Update the DOM for the last assistant message so the variant UI disappears immediately
+                    try {
+                        const area = document.getElementById('messagesArea');
+                        if (area) {
+                            const assistants = area.querySelectorAll('.message.assistant');
+                            const last = assistants && assistants.length ? assistants[assistants.length - 1] : null;
+                            if (last) {
+                                const contentDiv = last.querySelector('.message-content');
+                                if (contentDiv) {
+                                    // Remove existing toolbar and rebuild it without variants
+                                    const oldTb = contentDiv.querySelector('.assistant-toolbar');
+                                    if (oldTb) oldTb.remove();
+                                    const newTb = createAssistantCopyToolbar(m.content || '', m);
+                                    if (newTb) contentDiv.appendChild(newTb);
+                                }
+                            }
+                        }
+                    } catch {}
+                    // Also replace the current history state so Back won't show the old variant branch
+                    try {
+                        const snap = getCurrentConversationSnapshot();
+                        replaceChatHistoryState({ messagesSnapshot: snap, __tag: 'commit-variant' });
+                        historyLog('commit-variant-replace', { convo: currentConversationId, msgs: Array.isArray(snap) ? snap.length : 0 });
+                    } catch {}
+                    break; // Only commit the nearest tail assistant with variants
+                }
+            }
+        }
+    } catch {}
     
     // Add user message
     const userMessage = {
@@ -1656,6 +1995,17 @@ async function displayMessageWithTypewriter(message) {
     
     // For AI messages, use typewriter effect
     if (message.role === 'assistant') {
+        // If we are in a regeneration flow and carry variants are present, attach them to this message
+        try {
+            if (Array.isArray(window.__regenCarryVariants) && window.__regenCarryVariants.length) {
+                const uniq = Array.from(new Set(window.__regenCarryVariants.filter(Boolean)));
+                // Ensure we don't include the same text as the new content twice
+                const base = uniq.filter(v => String(v) !== String(message.content || ''));
+                message.__variants = [...base, String(message.content || '')];
+                message.__variantIndex = message.__variants.length - 1;
+                window.__regenCarryVariants = null;
+            }
+        } catch {}
         // Typewriter for assistant content only (no reasoning block)
         const finalText = renderMessageHTML(message.content || '');
         const textContainer = document.createElement('div');
@@ -1704,7 +2054,7 @@ async function displayMessageWithTypewriter(message) {
     }
 }
 
-function displayMessage(message) {
+function displayMessage(message, opts = {}) {
     const messagesArea = document.getElementById('messagesArea');
     const inputArea = document.querySelector('.input-area');
     const chatContainer = document.querySelector('.chat-container');
@@ -1788,8 +2138,22 @@ function displayMessage(message) {
     }
 
     // Scroll to bottom
-    if (shouldAutoScroll()) {
+    if (messagesArea) {
         messagesArea.scrollTop = messagesArea.scrollHeight;
+    }
+
+    if (!opts || !opts.fromPop) {
+        // If a regeneration just completed, push a full snapshot with a specific tag
+        if (window.__pendingPostRegeneratePush) {
+            try {
+                const snap = getCurrentConversationSnapshot();
+                pushChatHistoryState({ messagesSnapshot: snap, __tag: 'post-regenerate' });
+                historyLog('post-regenerate-push', { convo: currentConversationId, msgs: Array.isArray(snap) ? snap.length : 0 });
+            } catch {}
+            finally { try { window.__pendingPostRegeneratePush = false; } catch {} }
+        } else if (!__inRegeneration) {
+            pushChatHistoryState();
+        }
     }
 }
 
@@ -1859,32 +2223,49 @@ function updateConversationList() {
     });
 }
 
-function loadConversation(conversationId) {
+function loadConversation(conversationId, opts = {}) {
     currentConversationId = conversationId;
     const conversation = conversations[userId][conversationId];
     const inputArea = document.querySelector('.input-area');
     const messagesArea = document.getElementById('messagesArea');
-    
+
     // Clear messages area
     clearMessages();
-    
-    // If conversation has messages, move input to bottom
-    if (conversation.messages.length > 0) {
+
+    // Determine which messages to render (history snapshot override or stored)
+    const msgs = Array.isArray(opts.messagesOverride) ? opts.messagesOverride : (conversation.messages || []);
+
+    // If there are messages, move input to bottom
+    if (msgs.length > 0) {
         const chatContainer = document.querySelector('.chat-container');
         if (inputArea && chatContainer) {
             inputArea.classList.remove('centered');
             messagesArea.classList.remove('with-centered-input');
             chatContainer.classList.remove('input-centered');
         }
-        
+
         // Display all messages instantly (no typewriter for loaded conversations)
-        conversation.messages.forEach(message => {
-            displayMessage(message);
+        // Avoid pushing history for each message render
+        msgs.forEach(message => {
+            displayMessage(message, { fromPop: true });
         });
     }
-    
+
     // Update conversation list
     updateConversationList();
+    // On typewriter completion, handle history push with pending post-regenerate logic
+    try {
+        if (window.__pendingPostRegeneratePush) {
+            try {
+                const snap = getCurrentConversationSnapshot();
+                pushChatHistoryState({ messagesSnapshot: snap, __tag: 'post-regenerate' });
+                historyLog('post-regenerate-push', { convo: currentConversationId, msgs: Array.isArray(snap) ? snap.length : 0 });
+            } catch {}
+            finally { try { window.__pendingPostRegeneratePush = false; } catch {} }
+        } else if (!__inRegeneration) {
+            pushChatHistoryState();
+        }
+    } catch {}
 }
 
 function toggleDropdown(conversationId) {
@@ -2019,6 +2400,8 @@ function confirmDelete(conversationId) {
         if (currentConversationId === conversationId) {
             currentConversationId = null;
             clearMessages();
+            // Reflect empty state in history so Back restores properly
+            replaceChatHistoryState();
         }
         
         updateConversationList();
@@ -2375,9 +2758,36 @@ document.addEventListener('click', (e) => {
 
 // Initialize all managers when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
+    try { window.copyHistoryLogsToClipboard = copyHistoryLogsToClipboard; } catch {}
+    // Hotkey: Ctrl+Alt+H to copy in-app history logs
+    document.addEventListener('keydown', (e) => {
+        try {
+            const ctrl = e.ctrlKey || e.metaKey; // allow Cmd on macOS
+            if (ctrl && e.altKey && (e.key === 'h' || e.key === 'H')) {
+                e.preventDefault();
+                copyHistoryLogsToClipboard();
+            }
+        } catch {}
+    });
     new ThemeManager();
     new SidebarManager();
     new MessageInputManager();
+    // Initialize history state based on current URL hash
+    try {
+        const hash = (location.hash || '').replace(/^#/, '').trim();
+        if (hash && conversations[userId] && conversations[userId][hash]) {
+            // Replace state to avoid an extra back step
+            currentConversationId = hash;
+            replaceChatHistoryState();
+            loadConversation(hash, { fromPop: true });
+        } else {
+            replaceChatHistoryState();
+        }
+    } catch {
+        // Always ensure we have a baseline state
+        replaceChatHistoryState();
+    }
+
     // Apply chat font CSS variable from the input's computed font
     try {
         applyChatFontVariable();
