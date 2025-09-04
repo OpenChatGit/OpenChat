@@ -6,6 +6,59 @@ html, html[data-tauri-theme], html[data-tauri-theme="dark"], html[data-tauri-the
     box-sizing: border-box !important;
 }
 
+/* Chat font is controlled via --chat-font and applied consistently */
+:root { --chat-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif; }
+
+.chat-container,
+.messages-area,
+.messages-area .message,
+.messages-area .message .message-content,
+.messages-area .message .message-content *,
+.typewriter-container,
+.typewriter-container *,
+.typewriter-container p,
+.typewriter-container pre,
+.typewriter-container code,
+.typewriter-container span,
+.typewriter-container div {
+    font-family: var(--chat-font) !important;
+}
+
+/* Typical inline elements also use chat font (code retains monospace below) */
+.message .message-content p,
+.message .message-content a,
+.message .message-content em,
+.message .message-content strong,
+.message .message-content span,
+.message .message-content ul,
+.message .message-content ol,
+.message .message-content li {
+    font-family: var(--chat-font) !important;
+}
+
+/* Inline thinking links rendered next to the thinking label */
+.thinking-links {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    margin-left: 0.5rem;
+    flex-wrap: nowrap; /* keep in one line when possible */
+    white-space: nowrap;
+}
+
+.thinking-links a {
+    color: var(--text-secondary);
+    text-decoration: none;
+    opacity: 0.9;
+    font-size: 0.88rem;
+}
+
+.thinking-links a:hover {
+    text-decoration: underline;
+    color: var(--text-primary);
+    opacity: 1;
+}
+
 /* Reasoning-thinking dropdown in thinking indicator */
 .reasoning-thinking {
     background: transparent;
@@ -583,7 +636,7 @@ body {
     position: fixed;
     top: 0.6rem;
     left: calc(var(--sidebar-width) + 2rem);
-    z-index: 100;
+    z-index: 1200; /* above sidebar (1000) so button is clickable */
     transition: left 0.3s ease;
 }
 
@@ -630,7 +683,7 @@ body {
     border-radius: 12px;
     box-shadow: var(--shadow-lg);
     min-width: 200px;
-    z-index: 1000;
+    z-index: 1300; /* above dropdown container */
     display: none;
     padding: 0.25rem;
     margin-top: 0.5rem;
@@ -670,6 +723,20 @@ body {
 
 /* Compact pill badge for reasoning models in Ollama submenu */
 .reasoning-badge {
+    margin-left: 6px;
+    padding: 2px 6px;
+    font-size: 0.7rem;
+    line-height: 1.2;
+    color: #ffffff;
+    background-color: rgba(255, 255, 255, 0.14);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 999px;
+    flex: 0 0 auto; /* don't stretch/shrink */
+    align-self: center; /* align with text baseline */
+}
+
+/* Compact pill badge for tool-capable models in Ollama submenu */
+.tools-badge {
     margin-left: 6px;
     padding: 2px 6px;
     font-size: 0.7rem;
@@ -766,7 +833,7 @@ body {
     /* Keep within viewport and scroll if too tall */
     max-height: 60vh;
     overflow-y: auto;
-    z-index: 1100;
+    z-index: 1400; /* topmost to ensure it overlays */
     display: none;
     padding: 0.25rem;
 }
@@ -1259,6 +1326,16 @@ body .main-content .chat-container.input-centered .messages-area.with-centered-i
     margin-right: auto;
 }
 
+/* Ensure final rendered content uses the same chat font as during typing */
+.message .message-content,
+.message .message-content *,
+.typewriter-container,
+.typewriter-container * {
+    font-family: inherit !important;
+    font-weight: inherit;
+    font-size: inherit;
+}
+
 .message-content p {
     margin-bottom: 0.75rem;
     white-space: pre-wrap;
@@ -1619,6 +1696,158 @@ body .chat-container.input-centered .input-area.centered {
 
 .send-btn.active:hover i {
     color: #000 !important;
+}
+
+.assistant-toolbar {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+    opacity: 0;
+    transition: opacity 0.15s ease-in-out;
+}
+
+/* Reveal toolbar only when hovering assistant message container */
+.message.assistant:hover .assistant-toolbar {
+    opacity: 1;
+}
+
+.assistant-toolbar,
+.assistant-toolbar * {
+    outline: none !important;
+    box-shadow: none !important;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.copy-btn {
+    background: transparent;
+    border: none; /* remove UA border entirely */
+    color: white !important;
+    border-radius: 6px;
+    padding: 0.4rem 0.5rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    cursor: pointer;
+    line-height: 1;
+    font-family: var(--chat-font) !important;
+    outline: none;
+    box-shadow: none;
+    transition: background-color 0.15s ease-in-out, color 0.15s ease-in-out, box-shadow 0.15s ease-in-out, transform 0.05s ease-in-out;
+    -webkit-tap-highlight-color: transparent; /* remove tap highlight on mobile */
+    -webkit-appearance: none; /* remove native styling */
+    appearance: none; /* remove native styling */
+}
+
+.copy-btn .icon {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    background-color: currentColor; /* takes from button color */
+    -webkit-mask-image: url('./assets/content_copy.svg');
+    mask-image: url('./assets/content_copy.svg');
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+    mask-position: center;
+    -webkit-mask-size: 16px 16px;
+    mask-size: 16px 16px;
+    outline: none !important;
+}
+
+.copy-btn:hover {
+    background-color: #ffffff;
+    color: var(--bg-primary) !important;
+    box-shadow: inset 0 0 0 1px #ffffff; /* emulate border without layout shift */
+}
+
+.copy-btn:active {
+    transform: translateY(1px);
+}
+
+
+
+.copy-btn:focus,
+.copy-btn:focus-visible {
+    outline: none !important;
+    box-shadow: none !important;
+    /* keep any focus ring hidden */
+}
+
+.copy-btn:-moz-focusring {
+    outline: none !important;
+}
+
+/* Firefox removes inner focus border */
+.copy-btn::-moz-focus-inner {
+    border: 0;
+}
+
+/* Regenerate button mirrors copy button styling */
+.regen-btn {
+    background: transparent;
+    border: none; /* remove UA border entirely */
+    color: white !important;
+    border-radius: 6px;
+    padding: 0.4rem 0.5rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    cursor: pointer;
+    line-height: 1;
+    font-family: var(--chat-font) !important;
+    outline: none;
+    box-shadow: none;
+    transition: background-color 0.15s ease-in-out, color 0.15s ease-in-out, box-shadow 0.15s ease-in-out, transform 0.05s ease-in-out;
+    -webkit-tap-highlight-color: transparent; /* remove tap highlight on mobile */
+    -webkit-appearance: none; /* remove native styling */
+    appearance: none; /* remove native styling */
+}
+
+.regen-btn .icon {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    background-color: currentColor; /* takes from button color */
+    -webkit-mask-image: url('./assets/tryagain.svg');
+    mask-image: url('./assets/tryagain.svg');
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+    mask-position: center;
+    -webkit-mask-size: 16px 16px;
+    mask-size: 16px 16px;
+    outline: none !important;
+}
+
+.regen-btn:hover {
+    background-color: #ffffff;
+    color: var(--bg-primary) !important;
+    box-shadow: inset 0 0 0 1px #ffffff; /* emulate border without layout shift */
+}
+
+.regen-btn:active {
+    transform: translateY(1px);
+}
+
+.regen-btn:focus,
+.regen-btn:focus-visible {
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+.regen-btn:-moz-focusring {
+    outline: none !important;
+}
+
+/* Firefox removes inner focus border */
+.regen-btn::-moz-focus-inner {
+    border: 0;
+}
+
+.message.assistant .message-content {
+    position: relative;
 }
 
 .input-footer {

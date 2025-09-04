@@ -27,8 +27,11 @@ export function buildPromptWithContext(conversation, userMessage, options = {}) 
 
   // Default preamble keeps instructions minimal; streaming modules will add language directive.
   const preamble = (systemPreamble || (
-    'You are OpenChat, a helpful, concise AI assistant. ' +
-    'Follow the conversation context below and answer the final user message. '
+    'You are OpenChat, a helpful, conversational AI assistant. ' +
+    'Answer directly and naturally, with a friendly tone and without boilerplate. ' +
+    'Avoid stock phrases like "How can I assist you today?" unless explicitly requested. ' +
+    'Prefer concrete, specific answers with brief rationale or examples when useful. ' +
+    'Follow the conversation context below and answer the final user message.'
   )).trim();
 
   // Collect prior messages in reverse (most recent first) until budget reached.
@@ -94,7 +97,8 @@ export function buildPromptWithContext(conversation, userMessage, options = {}) 
   parts.push('');
   parts.push('Answer as the assistant. Use the conversation history above for context.');
   parts.push('Respond to the final user message only. If the user asks what you previously said, quote exactly the text of your prior assistant reply from this conversation.');
-  parts.push('Avoid generic acknowledgements unless they were explicitly requested. Do not answer with a single word/number if a sentence is expected. Do not repeat earlier outputs verbatim unless explicitly asked to quote. If your draft is very similar to your most recent assistant message, revise it to add new detail, examples, or a different angle.');
+  parts.push('Avoid generic acknowledgements or repeating the same intent. Use varied, natural phrasing. If your draft resembles your most recent assistant message, revise with new details, examples, or a different angle.');
+  parts.push('If the user just greets, reply with a brief, friendly greeting plus one concise follow-up question relevant to the chat context.');
 
   return parts.join('\n');
 }

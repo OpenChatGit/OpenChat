@@ -1,3 +1,21 @@
+## [0.2.3] - 2025-09-04
+### Added
+- LangChain integration on the backend (FastAPI) with LCEL streaming endpoints and optional LangSmith tracing.
+- Automatic backend startup in Tauri dev via `beforeDevCommand` (`start_backend.ps1` / cross-platform `start_backend.py`).
+- Tool-enabled chat paths with LangSearch tool (OpenAI bind_tools if available; ReAct fallback on Ollama).
+
+### Changed
+- Frontend prompt building now supports a dedicated regeneration mode to encourage diverse re-answers and avoid repeating phrasing.
+- Regeneration uses a prompt-only context override (immediate preceding user message) while the real conversation continues to mutate, enabling unlimited regenerations.
+- Typewriter render preserves the inline insertion anchor for the entire async animation so regenerated assistant messages appear exactly at the original position (no bottom-append).
+
+### Fixed
+- Inline regeneration: thinking placeholder and final assistant message now stay in place without scroll jumps or reordering.
+- Reduced self-references like "I already answered that…" by constraining regen context and adding a regeneration hint.
+
+### Known issues / Notes
+- Web Search integration via LangSearch is present but still has occasional issues; a follow-up patch will harden error handling and UX.
+
 # Changelog
 
 All notable changes to this project will be documented in this file.

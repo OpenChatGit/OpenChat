@@ -1,8 +1,8 @@
-import { streamSimpleResponse } from './ai/stream_simple.js';
-import { streamReasoningResponse } from './ai/stream_reasoning.js';
-import { buildPromptWithContext } from './ai/context_manager.js';
-import { answerFromHistoryIfApplicable } from './ai/history_answer.js';
- 
+import { streamSimpleResponse, streamSseResponse } from './ai/base/index.js';
+import { streamReasoningResponse } from './ai/reasoning/index.js';
+import { performWebSearchFastAPI, formatWebResultsForPrompt } from './ai/tool/websearch.js';
+import { buildPromptWithContext, answerFromHistoryIfApplicable } from './ai/global/index.js';
+
 // Tauri API wrapper
 const invoke = async (command, args) => {
     try {
@@ -14,11 +14,34 @@ const invoke = async (command, args) => {
             console.error('Tauri API not available. Please run the app via Tauri to use the backend.');
             throw new Error('Backend not available: start the app with Tauri (no browser mocks).');
         }
+
+// Apply the chat font to the CSS variable so all chat text uses the exact same font
+function applyChatFontVariable() {
+    try {
+        const ff = getChatFontFamily();
+        if (ff && typeof ff === 'string' && ff.trim()) {
+            document.documentElement.style.setProperty('--chat-font', ff);
+        }
+    } catch {}
+}
     } catch (error) {
         console.error('Tauri invoke error:', error);
-        return 'Error generating response';
+        throw error;
     }
 };
+
+// Get the exact font-family used by the user's chat input
+function getChatFontFamily() {
+    try {
+        const src = document.getElementById('messageInput') || document.body;
+        const cs = window.getComputedStyle(src);
+        return cs && cs.fontFamily ? cs.fontFamily : '';
+    } catch {
+        return '';
+    }
+}
+
+// Web search is handled by the backend via LangChain tools; no frontend binding needed
 
 // Manage Ollama polling interval with adaptive backoff and visibility pause
 function restartOllamaPolling() {
@@ -238,8 +261,15 @@ const MAX_REASONING_CHARS = 8000; // tighter soft cap to keep UI consistently fa
 const STREAM_RENDER_INTERVAL_MS = 50; // was 120ms
 const STREAM_MIN_DELTA_CHARS = 12; // was 48 chars
 // Prefer FastAPI gateway streaming when available
-const USE_FASTAPI_STREAM = false;
+const USE_FASTAPI_STREAM = false; // legacy flag (kept)
 const FASTAPI_URL = 'http://127.0.0.1:8000';
+
+// Persisted UI toggle: Backend SSE Streaming - Default enabled
+let USE_BACKEND_SSE = true;
+try {
+    const stored = localStorage.getItem('useBackendSSE');
+    USE_BACKEND_SSE = stored !== null ? stored === 'true' : true;
+} catch {}
 
 // Quick probe to see if FastAPI is up (short timeout)
 async function isFastAPIUp() {
@@ -254,19 +284,7 @@ async function isFastAPIUp() {
     }
 }
 
-// Reasoning streaming moved to ./ai/stream_reasoning.js
-
-// Web Search tool wrapper
-async function performWebSearch(query, max = 5) {
-    try {
-        const res = await invoke('web_search', { query, max_results: max });
-        if (!Array.isArray(res)) return [];
-        return res;
-    } catch (e) {
-        console.warn('Web search failed:', e);
-        return [];
-    }
-}
+// Reasoning streaming moved to dedicated module; web search tool is provided via ai/tool
 
 // Reasoning model detection helpers and overrides
 // You can force a model to be treated as reasoning or non-reasoning via localStorage keys:
@@ -277,6 +295,33 @@ const REASONING_MODEL_HINTS = [
 const REASONING_MODEL_EXACT = new Set([
     // Add exact names here if needed, e.g. 'deepseek-r1:8b'
 ]);
+
+// Tool-capable model detection helpers and overrides
+// You can force a model to be treated as tool-capable or not via localStorage keys:
+//   forceTools:<modelName> = "true"   OR   forceNoTools:<modelName> = "true"
+const TOOL_MODEL_HINTS = [
+    // Broad hints — keep conservative to avoid false positives
+    'qwen2.5', // Qwen 2.5 family generally supports tools/agents
+    'qwen2',
+    'qwen',
+    'tool', // models explicitly named with "tool" often include tool-use
+    'function-call', 'function_call'
+];
+const TOOL_MODEL_EXACT = new Set([
+    // Add exact names here if needed for your local models, e.g. 'qwen2.5:7b'
+]);
+
+function isToolCapableModelName(name) {
+    if (!name) return false;
+    const n = String(name).toLowerCase();
+    // Overrides
+    try {
+        if (localStorage.getItem(`forceTools:${name}`) === 'true') return true;
+        if (localStorage.getItem(`forceNoTools:${name}`) === 'true') return false;
+    } catch {}
+    if (TOOL_MODEL_EXACT.has(n)) return true;
+    return TOOL_MODEL_HINTS.some(h => n.includes(h));
+}
 
 function isReasoningModelName(name) {
     if (!name) return false;
@@ -361,21 +406,15 @@ function parseReasoningAndFinal(text) {
     return null;
 }
 
-function formatWebResultsForPrompt(results) {
-    if (!results || !results.length) return '';
-    const lines = results.slice(0, 5).map((r, i) => `${i + 1}. ${r.title} — ${r.url}\n${r.snippet}`);
-    return `\n\n[Web search results]\n${lines.join('\n\n')}\n\nUsing the above web results, answer the user's query with concise citations as [n] when relevant.`;
-}
+// formatWebResultsForPrompt is imported from ./ai/tool
 
 function buildToolAwareInstruction() {
-    // Minimal schema to let LLM request the web search tool explicitly
+    // Backend (LangChain) handles tool selection/execution transparently.
+    // Keep guidance minimal to avoid special client-side protocols.
     return (
         `\n\n[Tools Available]\n` +
-        `- websearch: Search the web for up-to-date information.\n` +
-        `\nHow to use a tool:\n` +
-        `If you need web data, respond ONLY with a single line starting with:\n` +
-        `WEBSEARCH: <your query>\n` +
-        `No other text. After results are provided, produce the final answer with brief [n] citations.\n`
+        `- Web search and other tools are available via the backend.\n` +
+        `When beneficial, incorporate up-to-date information and cite sources briefly.\n`
     );
 }
 
@@ -386,14 +425,469 @@ let userId = generateUUID();
 // Persisted selected Ollama model
 let selectedOllamaModel = localStorage.getItem('selectedOllamaModel') || null;
 
-// Markdown renderer (initialized when DOM is ready and libraries are present)
+// Rendering helpers: Plain text by default, Markdown only if code is present
 let __md = null;
+// Suppress auto-scroll when regenerating earlier messages
+let __suppressAutoScroll = false;
+const shouldAutoScroll = () => !__suppressAutoScroll;
+// Optional anchors to insert placeholder and next assistant message at a specific spot
+let __thinkingInsertBeforeEl = null; // DOM node to insert thinking before
+let __assistantInsertBeforeEl = null; // DOM node to insert next assistant message before
+const ensureMarkdown = () => {
+    if (!__md && window.markdownit) {
+        __md = window.markdownit({ html: false, linkify: true, breaks: true });
+    }
+    return __md;
+};
+
+const escapeHtml = (s) => (s || '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+
+const hasCode = (s) => {
+    if (!s) return false;
+    // fenced blocks, tildes, or inline backticks, or 4-spaces-indented lines
+    return /```|~~~|`[^`]+`|(^|\n) {4,}\S/.test(s);
+};
+
+// Normalize plain text spacing: remove stray spaces before punctuation and contractions
+function normalizePlainText(s) {
+    if (!s) return s;
+    let t = s;
+    // Collapse multiple spaces
+    t = t.replace(/[\t\f\v]+/g, ' ');
+    // Remove spaces before common punctuation: , . ! ? ; : ) ] } %
+    t = t.replace(/\s+([,\.\!\?;:\)\]\}%])/g, '$1');
+    // Remove spaces after opening punctuation: ( [ { 
+    t = t.replace(/([\(\[\{])\s+/g, '$1');
+    // Fix common English contractions split by spaces: I 'm -> I'm, don 't -> don't
+    t = t.replace(/\b(\w)\s+'\s*(\w)\b/g, "$1'$2");
+    return t;
+}
+
+const renderMessageHTML = (text) => {
+    try {
+        if (!hasCode(text)) {
+            // Plain text: normalize spacing, escape and keep line breaks
+            const normalized = normalizePlainText(text || '');
+            return `<p>${escapeHtml(normalized).replace(/\n/g, '<br>')}</p>`;
+        }
+        const md = ensureMarkdown();
+        if (md) return md.render(text || '');
+        return `<pre>${escapeHtml(text || '')}</pre>`;
+    } catch {
+        const normalized = normalizePlainText(text || '');
+        return `<p>${escapeHtml(normalized).replace(/\n/g, '<br>')}</p>`;
+    }
+};
+
+// Create a small toolbar with a copy button and a regenerate button for assistant messages
+function createAssistantCopyToolbar(textToCopy, messageRef) {
+    try {
+        const toolbar = document.createElement('div');
+        toolbar.className = 'assistant-toolbar';
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'copy-btn custom-tooltip';
+        btn.setAttribute('aria-label', 'Copy message');
+        btn.setAttribute('data-tooltip', 'Copy');
+        // Remove from tab order to prevent focus outline (requested style)
+        btn.setAttribute('tabindex', '-1');
+        // Prevent focus outline on mouse/touch interactions
+        btn.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+        });
+        btn.addEventListener('touchstart', (e) => {
+            // Avoid stealing focus on touch devices
+            // passive to keep scrolling smooth
+        }, { passive: true });
+
+        // Use SVG-based masked icon for modern, themeable color with currentColor
+        const icon = document.createElement('span');
+        icon.className = 'icon icon-copy';
+        btn.appendChild(icon);
+
+        const doCopy = async () => {
+            const plain = String(textToCopy || '');
+            let ok = false;
+            try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(plain);
+                    ok = true;
+                }
+            } catch {}
+            if (!ok) {
+                try {
+                    // Fallback textarea method
+                    const ta = document.createElement('textarea');
+                    ta.value = plain;
+                    ta.style.position = 'fixed';
+                    ta.style.left = '-9999px';
+                    document.body.appendChild(ta);
+                    ta.focus();
+                    ta.select();
+                    ok = document.execCommand('copy');
+                    document.body.removeChild(ta);
+                } catch {}
+            }
+            // Feedback via tooltip text only
+            const oldTip = btn.getAttribute('data-tooltip');
+            btn.setAttribute('data-tooltip', ok ? 'Copied!' : 'Copy failed');
+            setTimeout(() => {
+                btn.setAttribute('data-tooltip', oldTip || 'Copy');
+            }, 1200);
+        };
+
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            doCopy();
+            // Remove focus immediately after click
+            try { btn.blur(); } catch {}
+        });
+
+        toolbar.appendChild(btn);
+
+        // Regenerate button
+        const regenBtn = document.createElement('button');
+        regenBtn.type = 'button';
+        regenBtn.className = 'regen-btn custom-tooltip';
+        regenBtn.setAttribute('aria-label', 'Regenerate answer');
+        regenBtn.setAttribute('data-tooltip', 'Regenerate');
+        regenBtn.setAttribute('tabindex', '-1');
+        regenBtn.addEventListener('mousedown', (e) => { e.preventDefault(); });
+        regenBtn.addEventListener('touchstart', (e) => {}, { passive: true });
+
+        const regenIcon = document.createElement('span');
+        regenIcon.className = 'icon icon-regen';
+        regenBtn.appendChild(regenIcon);
+
+        regenBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            try { regenBtn.blur(); } catch {}
+            try {
+                await regenerateAssistantMessage(messageRef, regenBtn);
+            } catch (err) {
+                // Tooltip feedback on error
+                const old = regenBtn.getAttribute('data-tooltip');
+                regenBtn.setAttribute('data-tooltip', 'Failed');
+                setTimeout(() => regenBtn.setAttribute('data-tooltip', old || 'Regenerate'), 1200);
+            }
+        });
+
+        toolbar.appendChild(regenBtn);
+        return toolbar;
+    } catch {
+        return null;
+    }
+}
+
+// Regenerate the assistant's response for the given assistant message by
+// reusing the preceding user message content. Does not add a duplicate user message.
+async function regenerateAssistantMessage(messageRef, triggerEl) {
+    const messagesArea = document.getElementById('messagesArea');
+    const prevScrollTop = messagesArea ? messagesArea.scrollTop : null;
+    __suppressAutoScroll = true;
+    try {
+        const conversation = conversations[userId]?.[currentConversationId];
+        if (!conversation || !Array.isArray(conversation.messages)) {
+            return;
+        }
+        const idx = conversation.messages.indexOf(messageRef);
+        if (idx === -1) return;
+
+        // Walk backwards to find the preceding user message
+        let messageContent = null;
+        for (let i = idx - 1; i >= 0; i--) {
+            const m = conversation.messages[i];
+            if (m && m.role === 'user') {
+                messageContent = m.content;
+                break;
+            }
+        }
+        if (!messageContent) {
+            // Optional tooltip feedback if no user message found
+            if (triggerEl) {
+                const old = triggerEl.getAttribute('data-tooltip');
+                triggerEl.setAttribute('data-tooltip', 'No previous user message');
+                setTimeout(() => triggerEl.setAttribute('data-tooltip', old || 'Regenerate'), 1200);
+            }
+            return;
+        }
+
+        // Prepare DOM anchors before removing the old node
+        const oldContainer = triggerEl?.closest?.('.message.assistant');
+        const insertBefore = oldContainer?.nextSibling || null;
+        __thinkingInsertBeforeEl = insertBefore;
+        __assistantInsertBeforeEl = insertBefore;
+
+        // Remove the old assistant message from the conversation and UI before regenerating
+        const previousAssistantContent = messageRef?.content || '';
+        conversation.messages.splice(idx, 1);
+        conversation.updated_at = new Date();
+        updateConversationList();
+        if (oldContainer) oldContainer.remove();
+
+        // Build a limited context (prompt-only) with just the immediate preceding user message.
+        // We will still mutate the REAL conversation so that further regenerations keep working.
+        const contextOverrideMessages = [
+            { role: 'user', content: messageContent }
+        ];
+
+        // Build a regeneration hint to promote diversity and avoid repeating the previous answer
+        const prevTrim = (previousAssistantContent || '').slice(0, 800);
+        const regenerationHint = `\n[Regeneration]\nProduce a different alternative to your previous answer.\n- Do not repeat the same sentences or phrasing.\n- Vary tone, details, and structure.\n- If the question is the same, give a fresh angle, additional specifics, or examples.\nHere is the previous answer for contrast (truncated):\n"""${prevTrim}"""\n`;
+
+        // Run the same generation flow used after sending a user message, without pushing a new user message
+        // Pass the real conversation for mutation, but override prompt context for this call.
+        await generateAssistantFromContent(messageContent, conversation, {
+            additionalInstruction: regenerationHint,
+            contextOverrideMessages
+        });
+    } catch (err) {
+        console.warn('Regenerate failed:', err?.message || err);
+        throw err;
+    } finally {
+        try {
+            if (messagesArea != null && prevScrollTop != null) {
+                messagesArea.scrollTop = prevScrollTop;
+            }
+        } catch {}
+        __suppressAutoScroll = false;
+        __thinkingInsertBeforeEl = null;
+        // Do not clear __assistantInsertBeforeEl here; it should be cleared by the rendering
+        // function (e.g., displayMessageWithTypewriter) once the async animation completes.
+    }
+}
+
+// Generate assistant response using the given user message content and conversation context
+async function generateAssistantFromContent(messageContent, conversation, options = {}) {
+    // Generate AI response using Tauri backend (extracted from sendMessage flow)
+    try {
+        const toolAware = (activeTools && activeTools.has && activeTools.has('websearch')) ? buildToolAwareInstruction() : '';
+        const reasoningAware = (ENABLE_INTERNAL_REASONING_PROMPT && isReasoningModelActive()) ? buildReasoningInstruction() : '';
+        const additionalInstruction = (options && options.additionalInstruction) ? String(options.additionalInstruction) : '';
+        const contextOverrideMessages = (options && options.contextOverrideMessages) ? options.contextOverrideMessages : null;
+        const promptConversation = contextOverrideMessages ? { ...conversation, messages: contextOverrideMessages } : conversation;
+        let finalPrompt = buildPromptWithContext(promptConversation, messageContent, {
+            maxChars: 8000,
+            systemPreamble: undefined,
+            toolAware,
+            reasoningAware: reasoningAware + additionalInstruction
+        });
+        try {
+            const wantWeb = activeTools && activeTools.has && activeTools.has('websearch');
+            if (wantWeb && !isReasoningModelActive()) {
+                ensureThinkingMessage('Searching Web…');
+                const tz = (Intl && Intl.DateTimeFormat && Intl.DateTimeFormat().resolvedOptions().timeZone) || 'UTC';
+                const locale = (typeof navigator !== 'undefined' && navigator.language) ? navigator.language : 'en-US';
+                const now = new Date();
+                const nowLocal = now.toLocaleString(locale, { timeZone: tz, hour12: false });
+                const isoLocal = new Intl.DateTimeFormat(locale, {
+                    timeZone: tz,
+                    year: 'numeric', month: '2-digit', day: '2-digit',
+                    hour: '2-digit', minute: '2-digit', second: '2-digit'
+                }).format(now);
+                const weekday = new Intl.DateTimeFormat(locale, { timeZone: tz, weekday: 'long' }).format(now);
+                const year = now.getFullYear();
+                const utcIso = now.toISOString();
+                let coords = null;
+                try {
+                    if (typeof navigator !== 'undefined' && navigator.geolocation) {
+                        const geo = new Promise((resolve, reject) => {
+                            navigator.geolocation.getCurrentPosition(
+                                (pos) => resolve({
+                                    lat: Number(pos.coords.latitude.toFixed(3)),
+                                    lon: Number(pos.coords.longitude.toFixed(3))
+                                }),
+                                () => resolve(null),
+                                { enableHighAccuracy: false, timeout: 1200, maximumAge: 300000 }
+                            );
+                        });
+                        coords = await Promise.race([
+                            geo,
+                            new Promise((r) => setTimeout(() => r(null), 1500))
+                        ]);
+                    }
+                } catch {}
+                let __showedDomainList = false;
+                let __domainLabel = null;
+                const up = await isFastAPIUp();
+                if (up) {
+                    const locHint = coords ? `, approx_location: ${coords.lat},${coords.lon}` : '';
+                    const timeSensitive = /\b(today|heute|now|jetzt|time|uhrzeit|date|datum|weekday|wochentag)\b/i.test(messageContent);
+                    const enrichedQuery = `${messageContent} (consider locale ${locale}, timezone ${tz}, weekday ${weekday}, local time ${isoLocal}, year ${year}${coords ? `, near lat ${coords.lat} lon ${coords.lon}` : ''}); language: English only; prioritize English sources`;
+                    const results = await performWebSearchFastAPI(FASTAPI_URL, enrichedQuery, 5, timeSensitive ? 'day' : 'noLimit', true);
+                    try {
+                        const domains = (results || []).map(r => { try { return new URL(r.url).hostname.replace(/^www\./, ''); } catch { return null; } }).filter(Boolean);
+                        const top = Array.from(new Set(domains)).slice(0, 3);
+                        if (top.length) {
+                            __domainLabel = `Searching Web… (${top.join(', ')})`;
+                            setThinkingText(__domainLabel);
+                            try { setThinkingLinks((results || []).slice(0, 4)); } catch {}
+                            __showedDomainList = true;
+                        } else {
+                            const count = Array.isArray(results) ? results.length : 0;
+                            if (count > 0) {
+                                __domainLabel = `Searching Web… (${count} sources)`;
+                                setThinkingText(__domainLabel);
+                                try { setThinkingLinks((results || []).slice(0, 4)); } catch {}
+                                __showedDomainList = true;
+                            } else {
+                                __domainLabel = 'Searching Web… (no results)';
+                                setThinkingText(__domainLabel);
+                                try { setThinkingLinks([]); } catch {}
+                                __showedDomainList = true;
+                            }
+                        }
+                    } catch {}
+                    const block = formatWebResultsForPrompt(results);
+                    if (block && block.trim()) {
+                        const userCtx = `\n\n[User Context]\n- locale: ${locale}\n- timezone: ${tz}\n- weekday: ${weekday}\n- year: ${year}\n- local_now: ${nowLocal}\n- local_iso: ${isoLocal}\n- utc_iso: ${utcIso}\n${coords ? `- approx_location: ${coords.lat}, ${coords.lon}\n` : ''}`;
+                        finalPrompt = `${finalPrompt}${userCtx}${block}`;
+                    }
+                } else {
+                    try { setThinkingLinks([]); } catch {}
+                }
+                if (__showedDomainList) {
+                    setTimeout(() => { try { setThinkingText('Thinking…'); setThinkingLinks([]); } catch {} }, 1500);
+                } else {
+                    setThinkingText('Thinking…');
+                    try { setThinkingLinks([]); } catch {}
+                }
+            }
+        } catch {
+            setThinkingText('Thinking…');
+            try { setThinkingLinks([]); } catch {}
+        }
+        try {
+            const head = finalPrompt.slice(0, 800);
+            const tail = finalPrompt.length > 300 ? finalPrompt.slice(-300) : '';
+            console.debug('[prompt head]\n' + head);
+            if (tail) console.debug('[prompt tail]\n' + tail);
+        } catch {}
+
+        showThinkingAnimation();
+        try {
+            if (typeof __domainLabel !== 'undefined' && __domainLabel) {
+                setThinkingText(__domainLabel);
+                setTimeout(() => setThinkingText('Thinking…'), 1500);
+            }
+        } catch {}
+
+        if (!isReasoningModelActive()) {
+            if (USE_BACKEND_SSE) {
+                let usedSSE = false;
+                try {
+                    const upNow = await isFastAPIUp();
+                    if (upNow) {
+                        await streamSseResponse({
+                            serverBase: FASTAPI_URL,
+                            model: selectedOllamaModel || 'llama3.1',
+                            message: messageContent,
+                            history: (conversation?.messages || []).slice(-10),
+                            system: '',
+                            ui: {
+                                hideThinking: hideThinkingAnimation,
+                                displayTypewriter: displayMessageWithTypewriter,
+                                displayNow: displayMessage,
+                                updateConversationList,
+                                onErrorReturnToCaller: true,
+                            },
+                            conversation
+                        });
+                        usedSSE = true;
+                    }
+                } catch (e) {
+                    console.warn('[sse] falling back to direct streaming:', e?.message || e);
+                }
+                if (!usedSSE) {
+                    await streamSimpleResponse({
+                        finalPrompt,
+                        conversation,
+                        selectedModel: selectedOllamaModel || undefined,
+                        ui: {
+                            hideThinking: hideThinkingAnimation,
+                            displayTypewriter: displayMessageWithTypewriter,
+                            displayNow: displayMessage,
+                            updateConversationList
+                        }
+                    });
+                }
+            } else {
+                await streamSimpleResponse({
+                    finalPrompt,
+                    conversation,
+                    selectedModel: selectedOllamaModel || undefined,
+                    ui: {
+                        hideThinking: hideThinkingAnimation,
+                        displayTypewriter: displayMessageWithTypewriter,
+                        displayNow: displayMessage,
+                        updateConversationList
+                    }
+                });
+            }
+        } else {
+            await streamReasoningResponse({
+                finalPrompt,
+                originalUserMessage: messageContent,
+                conversation,
+                selectedModel: selectedOllamaModel || undefined,
+                ui: {
+                    hideThinking: hideThinkingAnimation,
+                    displayNow: displayMessage,
+                    displayTypewriter: displayMessageWithTypewriter,
+                    updateConversationList
+                },
+                tools: {
+                    activeTools,
+                    performWebSearch: async (query, max = 5) => {
+                        try { ensureThinkingMessage('Searching Web…'); } catch {}
+                        const results = await performWebSearchFastAPI(FASTAPI_URL, query, max);
+                        try {
+                            const domains = (results || []).map(r => { try { return new URL(r.url).hostname.replace(/^www\./, ''); } catch { return null; } }).filter(Boolean);
+                            const top = Array.from(new Set(domains)).slice(0, 3);
+                            if (top.length) {
+                                const label = `Searching Web… (${top.join(', ')})`;
+                                setThinkingText(label);
+                                try { setThinkingLinks((results || []).slice(0, 4)); } catch {}
+                                setTimeout(() => { try { setThinkingText('Thinking…'); setThinkingLinks([]); } catch {} }, 1500);
+                            } else {
+                                const count = Array.isArray(results) ? results.length : 0;
+                                if (count > 0) {
+                                    const label = `Searching Web… (${count} sources)`;
+                                    setThinkingText(label);
+                                    try { setThinkingLinks((results || []).slice(0, 4)); } catch {}
+                                } else {
+                                    const label = 'Searching Web… (no results)';
+                                    setThinkingText(label);
+                                    try { setThinkingLinks([]); } catch {}
+                                }
+                                setTimeout(() => { try { setThinkingText('Thinking…'); setThinkingLinks([]); } catch {} }, 1500);
+                            }
+                        } catch {}
+                        return results;
+                    },
+                    formatWebResultsForPrompt,
+                    buildReasoningInstruction
+                }
+            });
+        }
+    } catch (error) {
+        console.error('Error generating AI response:', error);
+        hideThinkingAnimation();
+        const errorMessage = {
+            role: 'assistant',
+            content: 'Entschuldigung, es gab einen Fehler bei der Verarbeitung Ihrer Nachricht.',
+            timestamp: new Date()
+        };
+        await displayMessageWithTypewriter(errorMessage);
+    }
+}
+
+// Markdown renderer (kept for compatibility in other parts of the app)
 const renderMarkdown = (text) => {
     try {
-        if (!__md && window.markdownit) {
-            __md = window.markdownit({ html: false, linkify: true, breaks: true });
-        }
-        const rawHtml = __md ? __md.render(text || '') : (text || '');
+        const md = ensureMarkdown();
+        const rawHtml = md ? md.render(text || '') : (text || '');
         if (window.DOMPurify) {
             return window.DOMPurify.sanitize(rawHtml, { USE_PROFILES: { html: true } });
         }
@@ -605,7 +1099,9 @@ class MessageInputManager {
     scrollToBottom() {
         if (this.messagesArea) {
             setTimeout(() => {
-                this.messagesArea.scrollTop = this.messagesArea.scrollHeight;
+                if (shouldAutoScroll()) {
+                    this.messagesArea.scrollTop = this.messagesArea.scrollHeight;
+                }
             }, 100);
         }
     }
@@ -673,7 +1169,7 @@ async function sendMessage(messageContent) {
     
     // Generate AI response using Tauri backend
     try {
-        // If Web Search tool is active, add tool-aware instruction so models know they can use it
+        // If tools are enabled in UI, provide only a minimal hint; backend (LangChain) performs actual tool use
         const toolAware = (activeTools && activeTools.has && activeTools.has('websearch')) ? buildToolAwareInstruction() : '';
         const reasoningAware = (ENABLE_INTERNAL_REASONING_PROMPT && isReasoningModelActive()) ? buildReasoningInstruction() : '';
         // Build context-aware prompt including prior relevant turns
@@ -683,6 +1179,109 @@ async function sendMessage(messageContent) {
             toolAware,
             reasoningAware
         });
+        // If websearch tool is active and we're on non-reasoning flow, proactively enrich the prompt
+        // so non-reasoning models (e.g., qwen2.5:7b) can leverage web data without special triggers
+        try {
+            const wantWeb = activeTools && activeTools.has && activeTools.has('websearch');
+            if (wantWeb && !isReasoningModelActive()) {
+                // Indicate search phase to the user
+                ensureThinkingMessage('Searching Web…');
+                // Gather lightweight local context (no permissions required)
+                const tz = (Intl && Intl.DateTimeFormat && Intl.DateTimeFormat().resolvedOptions().timeZone) || 'UTC';
+                const locale = (typeof navigator !== 'undefined' && navigator.language) ? navigator.language : 'en-US';
+                const now = new Date();
+                const nowLocal = now.toLocaleString(locale, { timeZone: tz, hour12: false });
+                const isoLocal = new Intl.DateTimeFormat(locale, {
+                    timeZone: tz,
+                    year: 'numeric', month: '2-digit', day: '2-digit',
+                    hour: '2-digit', minute: '2-digit', second: '2-digit'
+                }).format(now);
+                const weekday = new Intl.DateTimeFormat(locale, { timeZone: tz, weekday: 'long' }).format(now);
+                const year = now.getFullYear();
+                const utcIso = now.toISOString();
+                // Try to get approximate device location (user permission required). Short timeout and fail-safe.
+                let coords = null;
+                try {
+                    if (typeof navigator !== 'undefined' && navigator.geolocation) {
+                        const geo = new Promise((resolve, reject) => {
+                            navigator.geolocation.getCurrentPosition(
+                                (pos) => resolve({
+                                    lat: Number(pos.coords.latitude.toFixed(3)),
+                                    lon: Number(pos.coords.longitude.toFixed(3))
+                                }),
+                                () => resolve(null),
+                                { enableHighAccuracy: false, timeout: 1200, maximumAge: 300000 }
+                            );
+                        });
+                        // 1.5s cap so we don't block UX
+                        coords = await Promise.race([
+                            geo,
+                            new Promise((r) => setTimeout(() => r(null), 1500))
+                        ]);
+                    }
+                } catch {}
+                // Prepare labels visible across the block
+                let __showedDomainList = false;
+                let __domainLabel = null;
+                const up = await isFastAPIUp();
+                if (up) {
+                    // Nudge search toward local relevance for date/time queries
+                    const locHint = coords ? `, approx_location: ${coords.lat},${coords.lon}` : '';
+                    const timeSensitive = /\b(today|heute|now|jetzt|time|uhrzeit|date|datum|weekday|wochentag)\b/i.test(messageContent);
+                    const enrichedQuery = `${messageContent} (consider locale ${locale}, timezone ${tz}, weekday ${weekday}, local time ${isoLocal}, year ${year}${coords ? `, near lat ${coords.lat} lon ${coords.lon}` : ''}); language: English only; prioritize English sources`;
+                    const results = await performWebSearchFastAPI(FASTAPI_URL, enrichedQuery, 5, timeSensitive ? 'day' : 'noLimit', true);
+                    // Update thinking text to reflect domains that were searched
+                    try {
+                        const domains = (results || []).map(r => {
+                            try { return new URL(r.url).hostname.replace(/^www\./, ''); } catch { return null; }
+                        }).filter(Boolean);
+                        const top = Array.from(new Set(domains)).slice(0, 3);
+                        if (top.length) {
+                            __domainLabel = `Searching Web… (${top.join(', ')})`;
+                            setThinkingText(__domainLabel);
+                            // Also show clickable top links
+                            try { setThinkingLinks((results || []).slice(0, 4)); } catch {}
+                            __showedDomainList = true;
+                        } else {
+                            // Fallbacks when no URLs are present
+                            const count = Array.isArray(results) ? results.length : 0;
+                            if (count > 0) {
+                                __domainLabel = `Searching Web… (${count} sources)`;
+                                setThinkingText(__domainLabel);
+                                try { setThinkingLinks((results || []).slice(0, 4)); } catch {}
+                                __showedDomainList = true;
+                            } else {
+                                __domainLabel = 'Searching Web… (no results)';
+                                setThinkingText(__domainLabel);
+                                try { setThinkingLinks([]); } catch {}
+                                __showedDomainList = true;
+                            }
+                        }
+                    } catch {}
+                    const block = formatWebResultsForPrompt(results);
+                    if (block && block.trim()) {
+                        const userCtx = `\n\n[User Context]\n- locale: ${locale}\n- timezone: ${tz}\n- weekday: ${weekday}\n- year: ${year}\n- local_now: ${nowLocal}\n- local_iso: ${isoLocal}\n- utc_iso: ${utcIso}\n${coords ? `- approx_location: ${coords.lat}, ${coords.lon}\n` : ''}`;
+                        finalPrompt = `${finalPrompt}${userCtx}${block}`;
+                        console.debug('[websearch] injected', results?.length || 0, 'results into prompt');
+                    }
+                } else {
+                    console.warn('[websearch] FastAPI not available; skipping web enrichment');
+                    try { setThinkingLinks([]); } catch {}
+                }
+                // Switch back to normal thinking once search phase is done
+                if (__showedDomainList) {
+                    setTimeout(() => { try { setThinkingText('Thinking…'); setThinkingLinks([]); } catch {} }, 1500);
+                } else {
+                    setThinkingText('Thinking…');
+                    try { setThinkingLinks([]); } catch {}
+                }
+            }
+        } catch (e) {
+            console.warn('[websearch] enrichment failed:', e?.message || e);
+            // Ensure UI falls back to normal thinking label
+            setThinkingText('Thinking…');
+            try { setThinkingLinks([]); } catch {}
+        }
         // Debug preview to verify context inclusion (trimmed to avoid flooding console)
         try {
             const head = finalPrompt.slice(0, 800);
@@ -693,19 +1292,67 @@ async function sendMessage(messageContent) {
 
         // Show thinking animation (reasoning UI only if a reasoning model is active)
         showThinkingAnimation();
+        try {
+            // If proactive websearch computed a domain label, re-apply in case animation re-rendered the node
+            if (typeof __domainLabel !== 'undefined' && __domainLabel) {
+                setThinkingText(__domainLabel);
+                setTimeout(() => setThinkingText('Thinking…'), 1500);
+            }
+        } catch {}
         // Route by model type to avoid collisions between reasoning and non-reasoning logic
         if (!isReasoningModelActive()) {
-            await streamSimpleResponse({
-                finalPrompt,
-                conversation,
-                selectedModel: selectedOllamaModel || undefined,
-                ui: {
-                    hideThinking: hideThinkingAnimation,
-                    displayTypewriter: displayMessageWithTypewriter,
-                    displayNow: displayMessage,
-                    updateConversationList
+            if (USE_BACKEND_SSE) {
+                let usedSSE = false;
+                try {
+                    const upNow = await isFastAPIUp();
+                    if (upNow) {
+                        // Route via FastAPI SSE endpoint `/lcel/chat/sse`
+                        await streamSseResponse({
+                            serverBase: FASTAPI_URL,
+                            model: selectedOllamaModel || 'llama3.1',
+                            message: messageContent,
+                            history: (conversation?.messages || []).slice(-10),
+                            system: '',
+                            ui: {
+                                hideThinking: hideThinkingAnimation,
+                                displayTypewriter: displayMessageWithTypewriter,
+                                displayNow: displayMessage,
+                                updateConversationList,
+                                onErrorReturnToCaller: true,
+                            },
+                            conversation
+                        });
+                        usedSSE = true;
+                    }
+                } catch (e) {
+                    console.warn('[sse] falling back to direct streaming:', e?.message || e);
                 }
-            });
+                if (!usedSSE) {
+                    await streamSimpleResponse({
+                        finalPrompt,
+                        conversation,
+                        selectedModel: selectedOllamaModel || undefined,
+                        ui: {
+                            hideThinking: hideThinkingAnimation,
+                            displayTypewriter: displayMessageWithTypewriter,
+                            displayNow: displayMessage,
+                            updateConversationList
+                        }
+                    });
+                }
+            } else {
+                await streamSimpleResponse({
+                    finalPrompt,
+                    conversation,
+                    selectedModel: selectedOllamaModel || undefined,
+                    ui: {
+                        hideThinking: hideThinkingAnimation,
+                        displayTypewriter: displayMessageWithTypewriter,
+                        displayNow: displayMessage,
+                        updateConversationList
+                    }
+                });
+            }
         } else {
             // Route reasoning models to dedicated module
             await streamReasoningResponse({
@@ -719,9 +1366,42 @@ async function sendMessage(messageContent) {
                     displayTypewriter: displayMessageWithTypewriter,
                     updateConversationList
                 },
+                // Provide websearch hooks so WEBSEARCH: triggers can fetch results via FastAPI
                 tools: {
                     activeTools,
-                    performWebSearch,
+                    performWebSearch: async (query, max = 5) => {
+                        try { ensureThinkingMessage('Searching Web…'); } catch {}
+                        const results = await performWebSearchFastAPI(FASTAPI_URL, query, max);
+                        // While reasoning tool searched, surface domains to the user
+                        try {
+                            const domains = (results || []).map(r => {
+                                try { return new URL(r.url).hostname.replace(/^www\./, ''); } catch { return null; }
+                            }).filter(Boolean);
+                            const top = Array.from(new Set(domains)).slice(0, 3);
+                            if (top.length) {
+                                const label = `Searching Web… (${top.join(', ')})`;
+                                setThinkingText(label);
+                                try { setThinkingLinks((results || []).slice(0, 4)); } catch {}
+                                console.debug('[websearch] domains shown:', label);
+                                setTimeout(() => { try { setThinkingText('Thinking…'); setThinkingLinks([]); } catch {} }, 1500);
+                            } else {
+                                const count = Array.isArray(results) ? results.length : 0;
+                                if (count > 0) {
+                                    const label = `Searching Web… (${count} sources)`;
+                                    setThinkingText(label);
+                                    try { setThinkingLinks((results || []).slice(0, 4)); } catch {}
+                                    console.debug('[websearch] count shown:', label);
+                                } else {
+                                    const label = 'Searching Web… (no results)';
+                                    setThinkingText(label);
+                                    try { setThinkingLinks([]); } catch {}
+                                    console.debug('[websearch] empty shown');
+                                }
+                                setTimeout(() => { try { setThinkingText('Thinking…'); setThinkingLinks([]); } catch {} }, 1500);
+                            }
+                        } catch {}
+                        return results;
+                    },
                     formatWebResultsForPrompt,
                     buildReasoningInstruction
                 }
@@ -744,48 +1424,22 @@ async function sendMessage(messageContent) {
 }
 
 function showThinkingAnimation() {
-    const messagesArea = document.getElementById('messagesArea');
-    
-    // Create thinking animation element
-    const thinkingDiv = document.createElement('div');
-    thinkingDiv.className = 'message assistant';
-    thinkingDiv.id = 'thinking-message';
-    
-    const contentDiv = document.createElement('div');
-    contentDiv.className = 'message-content';
-    if (isReasoningModelActive()) {
-        contentDiv.innerHTML = `
-            <div class="reasoning-thinking">
-                <div class="reasoning-header" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('open')">
-                    <span class="thinking-text">Thinking…</span>
-                    <i class="fas fa-chevron-right reasoning-caret" aria-hidden="true"></i>
-                </div>
-                <div class="reasoning-dropdown">
-                    <div class="reasoning-placeholder">Reasoning will be shown with the final answer.</div>
-                </div>
-            </div>
-        `;
-    } else {
-        contentDiv.innerHTML = `
-            <span class="thinking-text">Thinking…</span>
-        `;
-    }
-    
-    thinkingDiv.appendChild(contentDiv);
-    messagesArea.appendChild(thinkingDiv);
-    
-    // Default: open during reasoning streaming so caret points down
     try {
-        const header = thinkingDiv.querySelector('.reasoning-header');
-        const dropdown = thinkingDiv.querySelector('.reasoning-dropdown');
-        if (header && dropdown) {
-            header.classList.add('open');
-            dropdown.classList.add('open');
+        // Delegate to ensureThinkingMessage so positioning respects the anchor
+        ensureThinkingMessage('Thinking…');
+        // Ensure reasoning block dropdown is open by default if present
+        const existing = document.getElementById('thinking-message');
+        if (existing) {
+            const header = existing.querySelector('.reasoning-header');
+            const dropdown = existing.querySelector('.reasoning-dropdown');
+            if (header && dropdown) {
+                header.classList.add('open');
+                dropdown.classList.add('open');
+            }
         }
-    } catch {}
-    
-    // Scroll to bottom
-    messagesArea.scrollTop = messagesArea.scrollHeight;
+    } catch (e) {
+        console.warn('Failed to show thinking animation', e);
+    }
 }
 
 function hideThinkingAnimation() {
@@ -793,6 +1447,90 @@ function hideThinkingAnimation() {
     if (thinkingMessage) {
         thinkingMessage.remove();
     }
+}
+
+// Ensure a thinking message exists and set its text label
+function ensureThinkingMessage(text = 'Thinking…') {
+    try {
+        let el = document.getElementById('thinking-message');
+        const messagesArea = document.getElementById('messagesArea');
+        if (!el) {
+            el = document.createElement('div');
+            el.className = 'message assistant';
+            el.id = 'thinking-message';
+            const content = document.createElement('div');
+            content.className = 'message-content';
+            // Match user's chat font
+            try {
+                const ff = getChatFontFamily();
+                if (ff) content.style.fontFamily = ff;
+            } catch {}
+            // Build structure according to current model type so links can render inline next to the label
+            if (isReasoningModelActive()) {
+                content.innerHTML = `
+                    <div class="reasoning-thinking">
+                        <div class="reasoning-header open" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('open')">
+                            <span class="thinking-text"></span>
+                            <span class="thinking-links"></span>
+                            <i class="fas fa-chevron-right reasoning-caret" aria-hidden="true"></i>
+                        </div>
+                        <div class="reasoning-dropdown open">
+                            <div class="reasoning-placeholder">Reasoning will be shown with the final answer.</div>
+                        </div>
+                    </div>
+                `;
+            } else {
+                content.innerHTML = `
+                    <span class="thinking-text"></span>
+                    <span class="thinking-links"></span>
+                `;
+            }
+            el.appendChild(content);
+            // Insert at anchored position if provided
+            const anchor = __thinkingInsertBeforeEl;
+            if (messagesArea && anchor && anchor.parentNode === messagesArea) {
+                messagesArea.insertBefore(el, anchor);
+            } else if (messagesArea) {
+                messagesArea.appendChild(el);
+            }
+        } else {
+            // If we already have one and an anchor is present, move it to the anchor position
+            const anchor = __thinkingInsertBeforeEl;
+            if (messagesArea && anchor && anchor.parentNode === messagesArea && el.parentNode === messagesArea) {
+                if (el.nextSibling !== anchor) {
+                    messagesArea.insertBefore(el, anchor);
+                }
+            }
+        }
+        setThinkingText(text);
+    } catch {}
+}
+
+function setThinkingText(text = 'Thinking…') {
+    try {
+        const label = document.querySelector('#thinking-message .thinking-text');
+        if (label) label.textContent = text;
+    } catch {}
+}
+
+// Update list of source links shown under the thinking label. Pass [] to clear.
+function setThinkingLinks(links = []) {
+    try {
+        const box = document.querySelector('#thinking-message .thinking-links');
+        if (!box) return;
+        if (!Array.isArray(links) || links.length === 0) {
+            box.innerHTML = '';
+            return;
+        }
+        const safe = links.slice(0, 4).filter(x => x && x.url);
+        if (!safe.length) { box.innerHTML = ''; return; }
+        const html = safe.map(x => {
+            const t = (x.title || x.url || '').toString().replace(/[\n\r]+/g, ' ').slice(0, 80);
+            const u = x.url;
+            return `<a href="${u}" target="_blank" rel="noopener noreferrer">${t}</a>`;
+        }).join(' \u00B7 ');
+        box.innerHTML = html;
+    } catch {}
 }
 
 function typeWriterEffect(element, text, speed = 30) {
@@ -841,7 +1579,7 @@ function typeWriterEffect(element, text, speed = 30) {
             const messagesArea = document.getElementById('messagesArea');
             if (messagesArea) {
                 const nearBottom = (messagesArea.scrollHeight - messagesArea.scrollTop - messagesArea.clientHeight) < 72;
-                if (nearBottom && (now - lastScrollAt) > 80) {
+                if (shouldAutoScroll() && nearBottom && (now - lastScrollAt) > 80) {
                     messagesArea.scrollTop = messagesArea.scrollHeight;
                     lastScrollAt = now;
                 }
@@ -859,6 +1597,10 @@ async function displayMessageWithTypewriter(message) {
     const messagesArea = document.getElementById('messagesArea');
     const inputArea = document.querySelector('.input-area');
     const chatContainer = document.querySelector('.chat-container');
+    // Guard against duplicate renderings
+    if (message && message.role === 'assistant' && message.__rendered) {
+        return;
+    }
     
     // Smoothly move input area to bottom when first message is displayed (FLIP with fallback, JS-only)
     if (inputArea && inputArea.classList.contains('centered') && !window.__centerTransitioned) {
@@ -906,25 +1648,56 @@ async function displayMessageWithTypewriter(message) {
     
     const contentDiv = document.createElement('div');
     contentDiv.className = 'message-content';
+    // Match user's chat font
+    try {
+        const ff = getChatFontFamily();
+        if (ff) contentDiv.style.fontFamily = ff;
+    } catch {}
     
     // For AI messages, use typewriter effect
     if (message.role === 'assistant') {
         // Typewriter for assistant content only (no reasoning block)
-        const finalText = renderMarkdown(message.content || '');
+        const finalText = renderMessageHTML(message.content || '');
         const textContainer = document.createElement('div');
         textContainer.className = 'typewriter-container';
         messageDiv.appendChild(contentDiv);
         contentDiv.appendChild(textContainer);
         // Append to DOM before typing so it becomes visible
-        messagesArea.appendChild(messageDiv);
-        // Ensure we start at bottom
-        messagesArea.scrollTop = messagesArea.scrollHeight;
+        const beforeEl = (__assistantInsertBeforeEl && __assistantInsertBeforeEl.parentNode === messagesArea)
+            ? __assistantInsertBeforeEl
+            : null;
+        const usedAnchorAtInsert = !!beforeEl;
+        if (beforeEl) {
+            messagesArea.insertBefore(messageDiv, beforeEl);
+            // Do NOT clear __assistantInsertBeforeEl here; keep it until the entire typewriter flow finishes
+        } else {
+            messagesArea.appendChild(messageDiv);
+        }
+        // Ensure we start at bottom only if no anchored insertion is used
+        if (!usedAnchorAtInsert && shouldAutoScroll()) {
+            messagesArea.scrollTop = messagesArea.scrollHeight;
+        }
         // Faster typewriter for non-reasoning models to avoid long waits
         const typeSpeed = 10; // ms per character (was default 30)
         await typeWriterEffect(textContainer, (message.content || ''), typeSpeed);
-        textContainer.replaceWith((() => { const div = document.createElement('div'); div.innerHTML = finalText; return div; })());
-        // Final scroll to bottom after rendering
-        messagesArea.scrollTop = messagesArea.scrollHeight;
+        // Force font inheritance after typewriter effect completes
+        textContainer.innerHTML = finalText;
+        // Ensure all elements inherit the correct font
+        const allElements = textContainer.querySelectorAll('*');
+        allElements.forEach(el => {
+            el.style.fontFamily = 'var(--chat-font)';
+        });
+        textContainer.style.fontFamily = 'var(--chat-font)';
+        // Append copy toolbar under assistant content
+        const toolbar = createAssistantCopyToolbar(message.content || '', message);
+        if (toolbar) contentDiv.appendChild(toolbar);
+        // Final scroll to bottom after rendering, unless anchored insert was used
+        if (!usedAnchorAtInsert && shouldAutoScroll()) {
+            messagesArea.scrollTop = messagesArea.scrollHeight;
+        }
+        // Now that the entire async flow has finished, clear the anchor so subsequent messages behave normally
+        __assistantInsertBeforeEl = null;
+        try { message.__rendered = true; } catch {}
     } else {
         // User messages appear instantly
         displayMessage(message);
@@ -935,6 +1708,10 @@ function displayMessage(message) {
     const messagesArea = document.getElementById('messagesArea');
     const inputArea = document.querySelector('.input-area');
     const chatContainer = document.querySelector('.chat-container');
+    // Avoid double-rendering assistant messages if already typed
+    if (message && message.role === 'assistant' && message.__rendered) {
+        return;
+    }
     
     // If this is the first user message and the input is centered, move it down immediately (FLIP)
     if (message.role !== 'assistant' && inputArea && inputArea.classList.contains('centered') && !window.__centerTransitioned) {
@@ -982,19 +1759,38 @@ function displayMessage(message) {
     
     const contentDiv = document.createElement('div');
     contentDiv.className = 'message-content';
+    // Match user's chat font
+    try {
+        const ff2 = getChatFontFamily();
+        if (ff2) contentDiv.style.fontFamily = ff2;
+    } catch {}
     
     if (message.role === 'assistant') {
-        // Render assistant messages as sanitized Markdown
-        contentDiv.innerHTML = renderMarkdown(message.content || '');
+        // Render assistant messages: plain text unless code detected
+        contentDiv.innerHTML = renderMessageHTML(message.content || '');
+        // Append copy/regenerate toolbar under assistant content
+        const toolbar = createAssistantCopyToolbar(message.content || '', message);
+        if (toolbar) contentDiv.appendChild(toolbar);
     } else {
         contentDiv.innerHTML = `<p>${message.content.replace(/\n/g, '<br>')}</p>`;
     }
     
     messageDiv.appendChild(contentDiv);
-    messagesArea.appendChild(messageDiv);
+    // Respect anchored insertion (used for regeneration inline placement)
+    const beforeEl = (__assistantInsertBeforeEl && __assistantInsertBeforeEl.parentNode === messagesArea)
+        ? __assistantInsertBeforeEl
+        : null;
+    if (beforeEl) {
+        messagesArea.insertBefore(messageDiv, beforeEl);
+        __assistantInsertBeforeEl = null;
+    } else {
+        messagesArea.appendChild(messageDiv);
+    }
 
     // Scroll to bottom
-    messagesArea.scrollTop = messagesArea.scrollHeight;
+    if (shouldAutoScroll()) {
+        messagesArea.scrollTop = messagesArea.scrollHeight;
+    }
 }
 
 // ... (rest of the code remains the same)
@@ -1289,12 +2085,17 @@ async function fetchOllamaModels() {
 // Probe connectivity to Ollama via Tauri
 async function checkOllamaReachable() {
     try {
-        // Call the Tauri command directly so that connection errors throw
+        // Prefer native Tauri invoke; if not present, consider unreachable in browser
         const tauri = window.__TAURI__;
-        const inv = tauri?.core?.invoke || tauri?.invoke || invoke;
-        await inv('get_ollama_models');
-        // If we reached here without throwing, Ollama responded => reachable
-        return true;
+        const inv = tauri?.core?.invoke || tauri?.invoke;
+        if (!inv) {
+            return false;
+        }
+        const res = await inv('get_ollama_models');
+        // Treat as reachable only if we get a list (Vec<String>)
+        const ok = Array.isArray(res);
+        console.debug('[Ollama] reachability check:', { ok, resType: Array.isArray(res) ? 'array' : typeof res, length: Array.isArray(res) ? res.length : undefined });
+        return ok;
     } catch (_) {
         // Any error means Ollama is not reachable
         return false;
@@ -1322,11 +2123,18 @@ async function updateOllamaCount() {
         window.__ollamaLastCount = newCount;
     }
 
-    if (statusDot && lastReachable !== reachable) {
-        statusDot.classList.toggle('online', reachable);
-        statusDot.classList.toggle('offline', !reachable);
-        statusDot.setAttribute('title', reachable ? 'Ollama connected' : 'Ollama not connected');
-        window.__ollamaLastReachable = reachable;
+    if (statusDot) {
+        // Always set current state to avoid stale UI, but minimize DOM churn via cache
+        if (lastReachable !== reachable) {
+            statusDot.classList.toggle('online', reachable);
+            statusDot.classList.toggle('offline', !reachable);
+            window.__ollamaLastReachable = reachable;
+        }
+        const desiredTitle = reachable ? 'Ollama connected' : 'Ollama not connected';
+        if (statusDot.getAttribute('data-tooltip') !== desiredTitle) {
+            // Store desired title in data-tooltip to integrate with custom tooltip system
+            statusDot.setAttribute('data-tooltip', desiredTitle);
+        }
     }
 
     // Adaptive polling backoff: poll slower when unreachable
@@ -1348,14 +2156,12 @@ async function toggleOllamaMenu(event) {
     const menu = document.getElementById('mainTitleMenu');
     if (!item || !menu) return;
 
-    // If a submenu already exists anywhere in the menu, just toggle it
+    // Remove any existing submenu to avoid stale/empty lists
     const existing = menu.querySelector('.main-title-submenu');
-    if (existing) {
-        existing.classList.toggle('show');
-        return;
-    }
+    if (existing) existing.remove();
 
     const models = await updateOllamaCount();
+    console.debug('[Ollama] submenu models:', { count: models.length, names: models.map(m=>m.name), reachable: !!window.__ollamaLastReachable });
 
     const submenu = document.createElement('div');
     submenu.className = 'main-title-submenu';
@@ -1387,6 +2193,14 @@ async function toggleOllamaMenu(event) {
                 badge.className = 'reasoning-badge';
                 badge.textContent = 'Reasoning';
                 left.appendChild(badge);
+            }
+            // Optional compact tools badge
+            const toolsCapable = isToolCapableModelName(m.name);
+            if (toolsCapable) {
+                const tBadge = document.createElement('span');
+                tBadge.className = 'tools-badge';
+                tBadge.textContent = 'Tools';
+                left.appendChild(tBadge);
             }
             row.appendChild(left);
 
@@ -1480,6 +2294,12 @@ function toggleToolsDropup() {
 
 // Global variable to track active tools
 let activeTools = new Set();
+// Reflect persisted SSE state in tools set on init
+if (USE_BACKEND_SSE) {
+    activeTools.add('sse');
+}
+// Also set localStorage to ensure consistency
+try { localStorage.setItem('useBackendSSE', String(USE_BACKEND_SSE)); } catch {}
 
 // Tool selection functionality
 function selectTool(toolType) {
@@ -1488,21 +2308,23 @@ function selectTool(toolType) {
     const toolElement = document.getElementById(`${toolType}-tool`);
     
     // Toggle tool active state
-    if (activeTools.has(toolType)) {
-        activeTools.delete(toolType);
-        toolElement.classList.remove('active');
-        console.log(`${toolType} tool deactivated`);
-    } else {
+    const activating = !activeTools.has(toolType);
+    if (activating) {
         activeTools.add(toolType);
         toolElement.classList.add('active');
         console.log(`${toolType} tool activated`);
+    } else {
+        activeTools.delete(toolType);
+        toolElement.classList.remove('active');
+        console.log(`${toolType} tool deactivated`);
     }
-    
+
     // DON'T close dropup - keep it open for multiple selections
     
-    // Here we can add logic for different tools
-    if (toolType === 'websearch') {
-        // Future: Implement web search functionality
+    // Side effects for specific tools
+    if (toolType === 'sse') {
+        USE_BACKEND_SSE = activating;
+        try { localStorage.setItem('useBackendSSE', String(USE_BACKEND_SSE)); } catch {}
     }
 }
 
@@ -1556,6 +2378,19 @@ document.addEventListener('DOMContentLoaded', () => {
     new ThemeManager();
     new SidebarManager();
     new MessageInputManager();
+    // Apply chat font CSS variable from the input's computed font
+    try {
+        applyChatFontVariable();
+        const input = document.getElementById('messageInput');
+        if (input) {
+            // Re-apply when input's geometry or attributes change (themes, classes, inline styles)
+            const ro = new ResizeObserver(() => applyChatFontVariable());
+            try { ro.observe(input); } catch {}
+            const mo = new MutationObserver(() => applyChatFontVariable());
+            try { mo.observe(input, { attributes: true, attributeFilter: ['style', 'class'] }); } catch {}
+        }
+        window.addEventListener('resize', applyChatFontVariable);
+    } catch {}
     
     // Initialize conversation list
     updateConversationList();
@@ -1663,6 +2498,14 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Initialize layout
     initializeCenteredLayout();
+
+    // Reflect persisted tool states in the Tools dropup UI
+    try {
+        const web = document.getElementById('websearch-tool');
+        const sse = document.getElementById('sse-tool');
+        if (web && activeTools.has('websearch')) web.classList.add('active');
+        if (sse && activeTools.has('sse')) sse.classList.add('active');
+    } catch {}
     
     // Removed periodic layout maintenance to reduce idle CPU usage
 });
@@ -1676,6 +2519,8 @@ document.addEventListener('visibilitychange', () => {
         }
         // Refresh Ollama status immediately when the window becomes active
         updateOllamaCount();
+        // Re-apply chat font on visibility gain (some environments swap fonts late)
+        applyChatFontVariable();
     }
 });
 

@@ -1,6 +1,6 @@
 [project]
 name = "repl-nix-workspace"
-version = "0.1.0"
+version = "0.2.3"
 description = "Add your description here"
 requires-python = ">=3.11"
 dependencies = [
@@ -13,4 +13,11 @@ dependencies = [
     "fastapi>=0.114.0",
     "uvicorn>=0.29.0",
     "httpx>=0.27.0",
+    # LangChain ecosystem for tools + Ollama
+    "langchain>=0.2.16",
+    "langchain-community>=0.2.11",
+    "langchain-ollama>=0.1.1",
+    "langchain-openai>=0.1.23",
+    # Env helpers
+    "python-dotenv>=1.0.1",
 ]

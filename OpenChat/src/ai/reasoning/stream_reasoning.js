@@ -1,7 +1,7 @@
 // Reasoning streaming module
-import { chooseResponseLanguage, languageNameFromCode } from './language_detection.js';
-import { buildPromptWithContext } from './context_manager.js';
-import { answerFromHistoryIfApplicable } from './history_answer.js';
+import { chooseResponseLanguage, languageNameFromCode } from '../global/language_detection.js';
+import { buildPromptWithContext } from '../global/context_manager.js';
+import { answerFromHistoryIfApplicable } from '../global/history_answer.js';
 // Handles reasoning models: live reasoning dropdown + final instant render
 // Usage:
 //   streamReasoningResponse({
@@ -116,8 +116,8 @@ export async function streamReasoningResponse({ finalPrompt, originalUserMessage
     if (!text) return text;
     if (!HAS_MARKERS_RE.test(text)) return text;
     return text
-      .replace(/<\/?>\s*think\s*>/gi, '')
-      .replace(/<\/?>\s*final\s*>/gi, '')
+      .replace(/<\/?\s*think\s*>/gi, '')
+      .replace(/<\/?\s*final\s*>/gi, '')
       .replace(/\[\s*REASONING[^\]]*\]/gi, '')
       .replace(/\[\s*FINAL[^\]]*\]/gi, '')
       .replace(/\[\s*THINK[^\]]*\]/gi, '')
@@ -293,6 +293,41 @@ export async function streamReasoningResponse({ finalPrompt, originalUserMessage
       finalOnly = stripMarkers(finalOnly || '').trim();
     }
 
+    // Time-sensitive safeguard: correct weekday if model output conflicts with [User Context]
+    try {
+      const isTimeSensitive = /\b(today|heute|now|jetzt|time|uhrzeit|date|datum|weekday|wochentag)\b/i.test(originalUserMessage || '');
+      if (isTimeSensitive && typeof finalPrompt === 'string' && finalPrompt.includes('[User Context]')) {
+        const wdMatch = finalPrompt.match(/\[User Context][\s\S]*?-\s*weekday:\s*([^\n]+)/i);
+        const expectedWeekdayRaw = wdMatch ? wdMatch[1].trim() : '';
+        if (expectedWeekdayRaw) {
+          const expectedLower = expectedWeekdayRaw.toLowerCase();
+          const en = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
+          const de = ['montag','dienstag','mittwoch','donnerstag','freitag','samstag','sonntag','sonnabend'];
+          const aliases = new Map([
+            ['sonnabend','samstag']
+          ]);
+          const known = new Set([...en, ...de]);
+          const found = [];
+          const wordRe = /\b([a-zäöüß]+)\b/gi;
+          let m;
+          while ((m = wordRe.exec(finalOnly)) !== null) {
+            const w = m[1].toLowerCase();
+            const canon = aliases.get(w) || w;
+            if (known.has(canon)) {
+              found.push({ text: m[1], lower: canon, index: m.index, length: m[0].length });
+            }
+          }
+          const expectedCanon = aliases.get(expectedLower) || expectedLower;
+          const mismatch = found.find(f => f.lower !== expectedCanon);
+          if (mismatch) {
+            finalOnly = finalOnly.slice(0, mismatch.index)
+              + expectedWeekdayRaw
+              + finalOnly.slice(mismatch.index + mismatch.length);
+          }
+        }
+      }
+    } catch {}
+
     try { ui.hideThinking?.(); } catch {}
 
     // Strict recall override: if the last user message is a recall question, bypass model output
@@ -322,8 +357,8 @@ export async function streamReasoningResponse({ finalPrompt, originalUserMessage
       }
     } catch {}
 
-  const cleanFinal = sanitizeFinal(finalOnly);
-  const aiMessage = { role: 'assistant', content: cleanFinal, reasoning: null, timestamp: new Date() };
+    const cleanFinal = sanitizeFinal(finalOnly);
+    const aiMessage = { role: 'assistant', content: cleanFinal, reasoning: null, timestamp: new Date() };
     conversation.messages.push(aiMessage);
     try {
       // Reasoning models: render instantly (no typewriter)
@@ -384,7 +419,7 @@ export async function streamReasoningResponse({ finalPrompt, originalUserMessage
     await cleanup();
     try { ui.hideThinking?.(); } catch {}
     const detail = typeof event?.payload === 'string' && event.payload.trim().length ? `\n\nDetails: ${event.payload}` : '';
-    const errorMessage = { role: 'assistant', content: 'Fehler beim Streamen der Antwort.' + detail, timestamp: new Date() };
+    const errorMessage = { role: 'assistant', content: 'Error while streaming the response.' + detail, timestamp: new Date() };
     if (ui.displayNow) ui.displayNow(errorMessage);
     conversation.updated_at = new Date();
     try { ui.updateConversationList?.(); } catch {}

@@ -1,13 +1,22 @@
 # OpenChat
 
-Local-first desktop chat app built with Tauri and vanilla HTML/CSS/JS. Fast UX, clean design, and native streaming via Ollama.
+Local-first desktop chat app built with Tauri and vanilla HTML/CSS/JS. Fast UX, clean design, and native streaming via Ollama. Backend integrates LangChain LCEL for streaming and tool calling.
+
+Current version: **0.2.3**
 
 — [Changelog](CHANGELOG.md) • [License](LICENSE.md)
 
 
+## Notice
+This repository is currently in a transitional phase: parts of the stack use LangChain (LCEL, tools), and other parts use custom-built modules (Tauri streaming, prompt builder, reasoning UI). This mix is intentional for now and will be consolidated once the LangChain integration is fully stabilized. In upcoming releases, LangChain-based components will replace bespoke modules where appropriate to reduce duplication and simplify maintenance.
+
+
 ## Features
 - Reasoning streaming: live reasoning in a dropdown; final answer renders instantly (`OpenChat/src/ai/stream_reasoning.js`).
-- Non-reasoning streaming: smooth typewriter at ~10 ms/char (`OpenChat/src/ai/stream_simple.js`).
+- Non-reasoning streaming: smooth typewriter at ~10 ms/char (`OpenChat/src/ai/base/stream_simple.js`).
+- LCEL plaintext stream endpoint: `POST /lcel/chat/stream` (FastAPI)
+- LCEL SSE stream endpoint: `POST /lcel/chat/sse` (FastAPI, `text/event-stream`)
+- Tool calling (LCEL): `POST /chat/tools/lcel` with LangSearch tool (OpenAI bind_tools if available, fallback to ReAct agent on Ollama)
 - Fast first-message UX: user message and “Thinking…” indicator render instantly.
 - Clean UI: minimal thinking indicator, centered welcome, custom overlay scrollbar.
 - Sidebar: live titles/timestamps; rename/delete with confirmation.
@@ -25,6 +34,7 @@ Local-first desktop chat app built with Tauri and vanilla HTML/CSS/JS. Fast UX, 
   - `ai/stream_reasoning.js` — reasoning streaming (live dropdown + instant final)
 - `OpenChat/src-tauri/` — Tauri backend (Ollama streaming, websearch cmd, warmup)
 - `templates/`, `static/`, `app.py`, `main.py` — additional files (not required for the Tauri app)
+ - `fastapi_server.py` — LangChain LCEL streaming/tool-calling backend (runs on 127.0.0.1:8000)
 
 
 ## Requirements
@@ -32,6 +42,7 @@ Local-first desktop chat app built with Tauri and vanilla HTML/CSS/JS. Fast UX, 
 - Rust toolchain (stable) and Tauri CLI
 - Node.js optional (tooling only)
 - Optional: Ollama running locally for model-backed responses
+- Optional: OpenAI for tool-calling path (`langchain-openai` + `OPENAI_API_KEY`)
 
 
 ## Quick Start (Windows)
@@ -44,7 +55,7 @@ Local-first desktop chat app built with Tauri and vanilla HTML/CSS/JS. Fast UX, 
      ```
 2. (Optional) Install Node.js LTS: https://nodejs.org/
 3. (Optional) Install and run Ollama: https://ollama.com/
-4. Run the app (dev):
+4. Run the app (dev) — backend starts automatically:
    ```powershell
    cargo tauri dev --manifest-path .\OpenChat\src-tauri\Cargo.toml
    ```
@@ -79,6 +90,18 @@ cargo tauri build --manifest-path .\OpenChat\src-tauri\Cargo.toml
 - **View/rename/delete chats**: Hover a conversation in the sidebar for actions. Deletion asks for confirmation.
 - **Model selection**: Use the top dropdown, choose Ollama, and pick an available local model.
 
+### Backend endpoints (FastAPI)
+- `GET /health` — readiness check
+- `POST /generate/stream` — passthrough stream to Ollama `/api/generate` (plaintext tokens)
+- `POST /lcel/chat/stream` — LCEL chain streaming (plaintext)
+- `POST /lcel/chat/sse` — LCEL chain streaming (SSE `text/event-stream`, frames as `data: ...\n\n` and final `data: [DONE]\n\n`)
+- `POST /tools/langsearch` — LangSearch proxy (requires `LANGSEARCH_API_KEY`)
+- `POST /chat/tools/lcel` — Tool-enabled chat. Uses OpenAI `bind_tools` if `OPENAI_API_KEY` is set and model supports tools, else falls back to ReAct agent on Ollama.
+
+### Frontend SSE helper (optional)
+If you want to consume SSE directly from the FastAPI backend (instead of Tauri events), use:
+`OpenChat/src/ai/base/stream_sse.js` → `streamSseResponse({ serverBase, model, message, history, system, ui })`.
+
 ### Reasoning vs. Non-Reasoning
 - Reasoning models (`OpenChat/src/ai/stream_reasoning.js`):
   - Live reasoning appears in a dropdown while generating.
@@ -100,8 +123,18 @@ cargo tauri build --manifest-path .\OpenChat\src-tauri\Cargo.toml
     - `preferredLanguage` — force a language
     - `disableLanguageDirective` — disable automatic language instruction
 
+### Environment variables
+- `LANGSEARCH_API_KEY` — required to enable LangSearch web search (server-side and tool)
+- `OLLAMA_URL` — optional override for Ollama URL (default `http://127.0.0.1:11434`)
+- `OPENAI_API_KEY` — optional; enables OpenAI `bind_tools` for `/chat/tools/lcel`
+- `LANGSMITH_TRACING=true`, `LANGSMITH_API_KEY`, `LANGSMITH_PROJECT` — optional; enable LangSmith traces per LangChain guides
+
+### Python dependencies
+See `pyproject.toml`. Optional OpenAI integration requires `langchain-openai`. Install via `pip install -e .` or compatible workflow.
+
 ## Websearch status
-- Websearch is temporarily disabled to reduce hallucination risk. Features relying on it (web citations, enrichment) are inactive for now.
+- Websearch runs via LangSearch. Server proxy endpoint: `/tools/langsearch`. LCEL tool-calling uses LangSearch as a tool with sources and summaries.
+- Note: Web Search still has occasional issues in 0.2.3 and will be hardened in an upcoming patch.
 
 
 ## Changelog

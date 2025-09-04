@@ -178,7 +178,7 @@ fn generate_ai_response(message: &str, model: Option<String>) -> String {
         Ok(r) => {
             if !r.status().is_success() {
                 return format!(
-                    "Ollama Fehler ({}): Bitte prüfe, ob Ollama läuft und das Modell '{}' vorhanden ist.",
+                    "Ollama error ({}): Please ensure Ollama is running and that the model '{}' exists.",
                     r.status(),
                     model
                 );
@@ -186,12 +186,12 @@ fn generate_ai_response(message: &str, model: Option<String>) -> String {
             match r.json::<OllamaGenerateResponse>() {
                 Ok(parsed) => parsed
                     .response
-                    .unwrap_or_else(|| "(Leere Antwort von Ollama)".to_string()),
-                Err(e) => format!("Antwort konnte nicht gelesen werden: {}", e),
+                    .unwrap_or_else(|| "(Empty response from Ollama)".to_string()),
+                Err(e) => format!("Could not parse response: {}", e),
             }
         }
         Err(e) => format!(
-            "Konnte keine Verbindung zu Ollama herstellen: {}. Läuft Ollama auf 127.0.0.1:11434?",
+            "Could not connect to Ollama: {}. Is Ollama running on 127.0.0.1:11434?",
             e
         ),
     }

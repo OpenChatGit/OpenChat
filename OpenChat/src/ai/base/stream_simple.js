@@ -1,6 +1,6 @@
 // Non-reasoning streaming module
-import { chooseResponseLanguage, languageNameFromCode } from './language_detection.js';
-import { answerFromHistoryIfApplicable } from './history_answer.js';
+import { chooseResponseLanguage, languageNameFromCode } from '../global/language_detection.js';
+import { answerFromHistoryIfApplicable } from '../global/history_answer.js';
 // Minimal dependencies: relies on Tauri invoke + event bus and small UI callbacks
 
 // Helpers for anti-repetition: normalize text and compute a simple Jaccard similarity over tokens
@@ -43,6 +43,62 @@ export async function streamSimpleResponse({ finalPrompt, conversation, selected
   const HARD_TIMEOUT_MS = 600000; // absolute cap per message: 10 minutes
   let hardTimeout = null;
 
+  // Buffered live renderer (transient assistant message during streaming)
+  // Disabled to avoid duplicate-looking output (user wants only final answer)
+  const SHOW_LIVE_PREVIEW = false;
+  let liveNode = null;
+  let flushTimer = null;
+  const FLUSH_INTERVAL_MS = 30;
+
+  const ensureLiveNode = () => {
+    if (!SHOW_LIVE_PREVIEW) return null;
+    try {
+      if (liveNode && document.body.contains(liveNode)) return liveNode;
+      const messagesArea = document.getElementById('messagesArea');
+      if (!messagesArea) return null;
+      const el = document.createElement('div');
+      el.className = 'message assistant live';
+      el.id = 'live-assistant-stream';
+      const content = document.createElement('div');
+      content.className = 'message-content';
+      content.textContent = '';
+      el.appendChild(content);
+      messagesArea.appendChild(el);
+      liveNode = el;
+      return liveNode;
+    } catch { return null; }
+  };
+
+  const removeLiveNode = () => {
+    try {
+      if (!SHOW_LIVE_PREVIEW) return;
+      if (liveNode && liveNode.parentNode) liveNode.parentNode.removeChild(liveNode);
+      liveNode = null;
+    } catch {}
+  };
+
+  const scheduleFlush = () => {
+    if (!SHOW_LIVE_PREVIEW) return;
+    if (flushTimer) return;
+    flushTimer = setTimeout(() => {
+      try {
+        const node = ensureLiveNode();
+        if (node) {
+          const content = node.querySelector('.message-content');
+          if (content) content.textContent = fullText;
+          const messagesArea = document.getElementById('messagesArea');
+          if (messagesArea) {
+            const nearBottom = (messagesArea.scrollHeight - messagesArea.scrollTop - messagesArea.clientHeight) < 64;
+            if (nearBottom) messagesArea.scrollTop = messagesArea.scrollHeight;
+          }
+        }
+      } catch {}
+      finally {
+        flushTimer = null;
+      }
+    }, FLUSH_INTERVAL_MS);
+  };
+
   const cleanup = async () => {
     try { unlisteners.forEach(u => { try { u(); } catch {} }); } catch {}
   };
@@ -63,6 +119,7 @@ export async function streamSimpleResponse({ finalPrompt, conversation, selected
       if (fullText.length < 1000 || fullText.length % 500 === 0) {
         console.debug('[simple] token received, total chars =', fullText.length);
       }
+      // Interim live preview disabled; do not render partial text
     }
     const now = Date.now();
     lastTokenAt = now;
@@ -78,9 +135,63 @@ export async function streamSimpleResponse({ finalPrompt, conversation, selected
     await cleanup();
 
     try { ui.hideThinking?.(); } catch {}
+    try { removeLiveNode(); } catch {}
 
     let finalOnly = (fullText || '').trim();
-    if (!finalOnly) finalOnly = 'Keine Antwort vom Modell.';
+    if (!finalOnly) finalOnly = 'No response from the model.';
+
+    // Time-sensitive safeguard: correct weekday and year if model output conflicts with [User Context]
+    try {
+      const lastUser = [...(conversation?.messages || [])].reverse().find(m => m.role === 'user');
+      const isTimeSensitive = /\b(today|heute|now|jetzt|time|uhrzeit|date|datum|weekday|wochentag)\b/i.test(lastUser?.content || '');
+      if (isTimeSensitive && typeof finalPrompt === 'string' && finalPrompt.includes('[User Context]')) {
+        // Extract expected weekday from the prompt's [User Context]
+        const wdMatch = finalPrompt.match(/\[User Context][\s\S]*?-\s*weekday:\s*([^\n]+)/i);
+        const expectedWeekdayRaw = wdMatch ? wdMatch[1].trim() : '';
+        const yMatch = finalPrompt.match(/\[User Context][\s\S]*?-\s*year:\s*(\d{4})/i);
+        const expectedYear = yMatch ? Number(yMatch[1]) : null;
+        if (expectedWeekdayRaw) {
+          const expectedLower = expectedWeekdayRaw.toLowerCase();
+          const en = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
+          const de = ['montag','dienstag','mittwoch','donnerstag','freitag','samstag','sonntag','sonnabend'];
+          const aliases = new Map([
+            ['sonnabend','samstag']
+          ]);
+          const known = new Set([...en, ...de]);
+          // Find any weekday mentioned in the answer
+          const found = [];
+          const wordRe = /\b([a-zäöüß]+)\b/gi;
+          let m;
+          while ((m = wordRe.exec(finalOnly)) !== null) {
+            const w = m[1].toLowerCase();
+            const canon = aliases.get(w) || w;
+            if (known.has(canon)) {
+              found.push({ text: m[1], lower: canon, index: m.index, length: m[0].length });
+            }
+          }
+          // If a different weekday is present, replace the first one with expected
+          const expectedCanon = aliases.get(expectedLower) || expectedLower;
+          const mismatch = found.find(f => f.lower !== expectedCanon);
+          if (mismatch) {
+            // Preserve original casing by replacing the matched segment
+            finalOnly = finalOnly.slice(0, mismatch.index)
+              + expectedWeekdayRaw
+              + finalOnly.slice(mismatch.index + mismatch.length);
+          }
+        }
+        // Correct clearly wrong current-year mentions (conservative: replace first 4-digit year if it differs)
+        if (expectedYear) {
+          const yrRe = /(\b(19|20)\d{2}\b)/;
+          const mYear = finalOnly.match(yrRe);
+          if (mYear) {
+            const mentioned = Number(mYear[1]);
+            if (mentioned !== expectedYear) {
+              finalOnly = finalOnly.replace(yrRe, String(expectedYear));
+            }
+          }
+        }
+      }
+    } catch {}
 
     // Strict recall override: if the last user message is a recall question, bypass model output
     try {
@@ -91,15 +202,22 @@ export async function streamSimpleResponse({ finalPrompt, conversation, selected
       }
     } catch {}
 
-    // Anti-repetition safeguard: if model repeats the last assistant message (even near-duplicate), avoid echoing; offer elaboration instead
+    // Anti-repetition safeguard (softer): only trigger on near-identical, recent, sufficiently long replies
     try {
       const lastAssistant = [...(conversation?.messages || [])].reverse().find(m => m.role === 'assistant');
       const lastUser = [...(conversation?.messages || [])].reverse().find(m => m.role === 'user');
-      const sameAsPrev = lastAssistant && typeof lastAssistant.content === 'string' && (
-        normalizeText(lastAssistant.content) === normalizeText(finalOnly)
-        || jaccardSimilarity(lastAssistant.content, finalOnly) > 0.97
-        || (normalizeText(finalOnly).includes(normalizeText(lastAssistant.content)) && Math.abs(finalOnly.length - lastAssistant.content.length) < 16)
+      // Recency: only consider the most recent assistant turn
+      const lastAssistantIndex = (conversation?.messages || []).lastIndexOf(lastAssistant);
+      const isRecent = lastAssistantIndex >= ((conversation?.messages || []).length - 3);
+      const la = (lastAssistant?.content || '').trim();
+      const fb = (finalOnly || '').trim();
+      const longEnough = la.length >= 60 && fb.length >= 60; // ignore very short/greeting-like messages
+      const verySimilar = (
+        normalizeText(la) === normalizeText(fb)
+        || jaccardSimilarity(la, fb) > 0.995
+        || (normalizeText(fb).includes(normalizeText(la)) && Math.abs(fb.length - la.length) < 12)
       );
+      const sameAsPrev = Boolean(lastAssistant) && isRecent && longEnough && verySimilar;
       if (sameAsPrev) {
         const u = (lastUser?.content || '').toLowerCase();
         const metaPrefixEN = 'i already answered that';
@@ -177,8 +295,9 @@ export async function streamSimpleResponse({ finalPrompt, conversation, selected
     if (hardTimeout) { clearTimeout(hardTimeout); hardTimeout = null; }
     await cleanup();
     try { ui.hideThinking?.(); } catch {}
+    try { removeLiveNode(); } catch {}
 
-    const errorMessage = { role: 'assistant', content: 'Entschuldigung, es gab einen Fehler bei der Verarbeitung Ihrer Nachricht.', timestamp: new Date() };
+    const errorMessage = { role: 'assistant', content: 'Sorry, there was an error processing your message.', timestamp: new Date() };
     if (ui.displayTypewriter) {
       await ui.displayTypewriter(errorMessage);
     } else if (ui.displayNow) {
@@ -218,6 +337,7 @@ export async function streamSimpleResponse({ finalPrompt, conversation, selected
     try { if (idleTimer) { clearInterval(idleTimer); idleTimer = null; } } catch {}
     try { if (hardTimeout) { clearTimeout(hardTimeout); hardTimeout = null; } } catch {}
     try { await cleanup(); } catch {}
+    try { removeLiveNode(); } catch {}
     if (window.__cancelActiveStream === cancelThisStream) {
       window.__cancelActiveStream = null;
     }
@@ -260,7 +380,8 @@ export async function streamSimpleResponse({ finalPrompt, conversation, selected
     const sample = lastUser?.content || finalPrompt;
     const code = chooseResponseLanguage(sample, 'en');
     const name = languageNameFromCode(code);
-    const directive = `Please respond exclusively in ${name} (${code}).\n`;
+    // Stronger guidance: exclusive output language to avoid mixing DE/EN
+    const directive = `Please respond exclusively in ${name} (${code}). Do not mix languages unless explicitly requested.\n`;
     finalPrompt = `${directive}${finalPrompt}`;
   } catch {}
 
