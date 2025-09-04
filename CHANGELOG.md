@@ -1,20 +1,46 @@
 ## [0.2.3] - 2025-09-04
 ### Added
-- LangChain integration on the backend (FastAPI) with LCEL streaming endpoints and optional LangSmith tracing.
-- Automatic backend startup in Tauri dev via `beforeDevCommand` (`start_backend.ps1` / cross-platform `start_backend.py`).
-- Tool-enabled chat paths with LangSearch tool (OpenAI bind_tools if available; ReAct fallback on Ollama).
+- Backend: LangChain/LCEL integration in `fastapi_server.py`
+  - `POST /lcel/chat/stream` — plaintext streaming via LCEL chain.
+  - `POST /lcel/chat/sse` — SSE streaming (`text/event-stream`).
+  - Optional tracing via LangChain/LangSmith.
+- Backend tools: LangSearch integration
+  - `POST /tools/langsearch` proxy endpoint with API key handling.
+  - `POST /chat/tools/lcel` tool-enabled chat. Uses OpenAI `bind_tools` when OpenAI is available; falls back to a ReAct agent on Ollama.
+- Dev UX: Automatic FastAPI backend start in Tauri dev
+  - `OpenChat/src-tauri/tauri.conf.json` → `beforeDevCommand` launches `start_backend.ps1` (or `start_backend.py`).
+  - Health endpoint `GET /health` used by the frontend warm-up.
+- Frontend: Prompt Regeneration Mode
+  - `OpenChat/src/main.js` → new regeneration pipeline (`regenerateAssistantMessage(...)`).
+  - Prompt-only context for regenerations via `contextOverrideMessages` (only the preceding user message).
+  - Additional instruction via `additionalInstruction` to diversify outputs (avoids repeating the previous answer).
+  - Inline rendering at the exact same position thanks to stable insert anchors.
 
 ### Changed
-- Frontend prompt building now supports a dedicated regeneration mode to encourage diverse re-answers and avoid repeating phrasing.
-- Regeneration uses a prompt-only context override (immediate preceding user message) while the real conversation continues to mutate, enabling unlimited regenerations.
-- Typewriter render preserves the inline insertion anchor for the entire async animation so regenerated assistant messages appear exactly at the original position (no bottom-append).
+- Frontend regeneration flow in `OpenChat/src/main.js`
+  - `regenerateAssistantMessage(...)` now:
+    - Prepares DOM anchors so the new answer renders inline at the same position.
+    - Removes the old assistant turn from the real conversation but uses a prompt-only context of just the preceding user message (`contextOverrideMessages`).
+    - Passes a regeneration hint to enforce varied phrasing and details (no copy of the previous answer).
+    - Allows unlimited regenerations of the same user turn.
+  - `generateAssistantFromContent(...)` now accepts `{ additionalInstruction, contextOverrideMessages }` and appends instructions to the prompt.
+  - `displayMessageWithTypewriter(...)` keeps `__assistantInsertBeforeEl` alive until the animation ends (prevents bottom-append).
+- Prompt builder in `OpenChat/src/ai/global/context_manager.js`
+  - Strengthened instructions to avoid repetition and boilerplate.
+  - Keeps a small history window while honoring explicit overrides from regeneration.
+- Documentation
+  - `README.md` updated with version, auto-backend start note, and a Notice about mixed LangChain/custom modules during transition.
 
 ### Fixed
-- Inline regeneration: thinking placeholder and final assistant message now stay in place without scroll jumps or reordering.
-- Reduced self-references like "I already answered that…" by constraining regen context and adding a regeneration hint.
+- Inline regeneration glitches
+  - Thinking placeholder respects `__thinkingInsertBeforeEl` and stays inline.
+  - Final assistant message no longer jumps to the bottom; anchor is cleared only after render completes.
+- Self-references like "I already answered that…"
+  - Reduced by limiting regen prompt context to the target user turn and by adding a regeneration-specific instruction block.
 
 ### Known issues / Notes
-- Web Search integration via LangSearch is present but still has occasional issues; a follow-up patch will harden error handling and UX.
+- Web Search (LangSearch) is integrated but still shows occasional issues. Stabilization (timeouts, retries, UX) will follow shortly.
+- OpenAI API keys are not fully supported yet; broader OpenAI support and setup guidance will arrive in the next releases.
 
 # Changelog
 
