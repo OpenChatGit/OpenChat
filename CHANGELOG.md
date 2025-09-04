@@ -49,12 +49,6 @@ The format is inspired by Keep a Changelog and uses calendar dates. The project 
 - Web Search (LangSearch) is integrated but still shows occasional issues. Stabilization (timeouts, retries, UX) will follow shortly.
 - OpenAI API keys are not fully supported yet; broader OpenAI support and setup guidance will arrive in the next releases.
 
-# Changelog
-
-All notable changes to this project will be documented in this file.
-
-The format is inspired by Keep a Changelog and uses calendar dates. The project does not yet adhere to Semantic Versioning.
-
 ## [0.1.5] - 2025-08-31
 ### Added
 - Hidden title directive + ID for reasoning models: during thinking, emit exactly one line `TITLE: …`. It is parsed from the reasoning buffer and applied to `conversation.title` (never shown in the visible chat).
