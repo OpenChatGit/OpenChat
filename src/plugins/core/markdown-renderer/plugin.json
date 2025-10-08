@@ -1,0 +1,12 @@
+{
+  "id": "markdown-renderer",
+  "name": "Markdown Renderer",
+  "version": "1.0.0",
+  "description": "Renders markdown content with syntax highlighting, math support, and GitHub Flavored Markdown",
+  "author": "OpenChat Team",
+  "homepage": "https://github.com/openchat/plugins/markdown-renderer",
+  "license": "MIT",
+  "type": "renderer",
+  "appVersion": "0.1.0",
+  "core": true
+}
