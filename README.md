@@ -51,8 +51,7 @@ OpenChat is a modular, cross-platform LLM chat application built with Tauri, Rea
 1. Clone the repository and install dependencies:
 
    ```bash
-   git clone <repository-url>
-   cd OpenChat
+   git clone https://github.com/OpenChatGit/OpenChat.git
    npm install
    ```
 
