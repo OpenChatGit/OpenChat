@@ -29,6 +29,7 @@ OpenChat is a modular, cross-platform LLM chat application built with Tauri, Rea
 - **Flexible configuration** – Switch providers, models, and credentials from the UI.
 - **Rich Markdown support** – Render code blocks, tables, and inline formatting.
 - **Mathematical rendering** – Render LaTeX expressions through KaTeX.
+- **Puppeteer web search** – Built-in headless browser pipeline that augments answers with fresh web context via RAG.
 
 ## Supported Providers
 
@@ -106,6 +107,18 @@ src/
 ├── types/           # TypeScript type definitions
 └── lib/             # Utility functions
 ```
+
+## Web Search Pipeline
+
+OpenChat includes a Puppeteer-driven search workflow that enriches model answers with current web information:
+
+- **Coordinator** – `WebSearchTool` in `src/global_tools/web-search/index.ts` orchestrates querying, scraping, caching, and formatting.
+- **Headless scraping** – `PuppeteerScraper` in `src/global_tools/web-search/puppeteerScraper.ts` launches the user’s Chromium-based browser through `puppeteer-core` to render dynamic pages.
+- **Fetch fallback** – `WebScraper` in `src/global_tools/web-search/scraper.ts` retrieves HTML via the Tauri backend when no local browser is available.
+- **RAG processing** – `RAGProcessor` in `src/global_tools/web-search/rag.ts` chunks content, ranks relevance, and synthesizes summaries with citations.
+- **Automatic triggers** – `performWebSearch()` in `src/lib/webSearchHelper.ts` decides when to call the pipeline and injects the formatted evidence into the model prompt.
+
+The system queries DuckDuckGo without API keys, handles JavaScript-heavy pages, and returns structured context that boosts answer reliability for time-sensitive questions.
 
 ## Adding a New Provider
 
