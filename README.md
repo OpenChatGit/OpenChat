@@ -1,24 +1,42 @@
+![OpenChat screenshot](https://i.imgur.com/UnQdl8P.png)
+
 # OpenChat
 
-A highly modular, cross-platform LLM chat application built with Tauri, React, and TypeScript. OpenChat provides a ChatGPT-like interface that works with local AI providers like Ollama, LM Studio, and llama.cpp.
+OpenChat is a modular, cross-platform LLM chat application built with Tauri, React, and TypeScript. It delivers a ChatGPT-style interface that connects seamlessly to local AI providers such as Ollama, LM Studio, and llama.cpp.
+
+## Table of Contents
+
+- [Features](#features)
+- [Supported Providers](#supported-providers)
+- [Getting Started](#getting-started)
+- [Architecture](#architecture)
+- [Adding a New Provider](#adding-a-new-provider)
+- [Creating Custom Plugins](#creating-custom-plugins)
+- [Configuration](#configuration)
+- [Development](#development)
+- [Tech Stack](#tech-stack)
+- [License](#license)
+- [Recommended IDE Setup](#recommended-ide-setup)
 
 ## Features
 
-- 🎨 **Modern UI/UX** - ChatGPT-inspired interface with dark mode support
-- 🔌 **Modular Provider System** - Easy to add new LLM providers
-- 🧩 **Plugin System** - Extend functionality with custom plugins
-- 🚀 **Fast & Native** - Built with Tauri for optimal performance
-- 💬 **Streaming Support** - Real-time response streaming
-- 📝 **Session Management** - Save and manage multiple chat sessions
-- ⚙️ **Flexible Configuration** - Easy provider and model switching
-- 🎯 **Markdown Rendering** - Full markdown support with syntax highlighting
-- 📊 **Math Support** - LaTeX/KaTeX rendering for mathematical expressions
+- **Modern interface** – ChatGPT-inspired layout with full dark-mode support.
+- **Modular provider system** – Plug in new LLM providers without touching core code.
+- **Plugin runtime** – Extend the chat experience with custom plugins.
+- **Native performance** – Tauri application shell keeps the UI fast and lightweight.
+- **Streaming responses** – Display tokens as soon as they arrive from the model.
+- **Session management** – Create, persist, and revisit conversations.
+- **Flexible configuration** – Switch providers, models, and credentials from the UI.
+- **Rich Markdown support** – Render code blocks, tables, and inline formatting.
+- **Mathematical rendering** – Render LaTeX expressions through KaTeX.
 
 ## Supported Providers
 
-- **Ollama** - Local LLM runtime (default: http://localhost:11434)
-- **LM Studio** - Desktop app for running LLMs (default: http://localhost:1234)
-- **llama.cpp** - Efficient LLM inference (default: http://localhost:8080)
+| Provider | Default endpoint | Notes |
+| --- | --- | --- |
+| **Ollama** | `http://localhost:11434` | Local LLM runtime and default backend. |
+| **LM Studio** | `http://localhost:1234` | Desktop application for running quantized models. |
+| **llama.cpp** | `http://localhost:8080` | High-performance inference server for GGUF models. |
 
 ## Getting Started
 
@@ -30,23 +48,36 @@ A highly modular, cross-platform LLM chat application built with Tauri, React, a
 
 ### Installation
 
-```bash
-# Install dependencies
-npm install
+1. Clone the repository and install dependencies:
 
-# Run in development mode
-npm run dev
+   ```bash
+   git clone <repository-url>
+   cd OpenChat
+   npm install
+   ```
 
-# Build for production
-npm run build
+2. Start the React development server:
 
-# Run Tauri app
-npm run tauri dev
-```
+   ```bash
+   npm run dev
+   ```
+
+3. Launch the desktop shell with Tauri:
+
+   ```bash
+   npm run tauri dev
+   ```
+
+4. Build production artifacts when you are ready to ship:
+
+   ```bash
+   npm run build
+   npm run tauri build
+   ```
 
 ## Architecture
 
-The project follows a highly modular architecture:
+OpenChat keeps UI, provider integrations, and plugin logic decoupled to simplify maintenance and extension:
 
 ```
 src/
@@ -86,7 +117,7 @@ src/
 
 ## Creating Custom Plugins
 
-OpenChat has a powerful plugin system. Create custom plugins to extend functionality:
+OpenChat exposes a plugin API that allows you to extend message processing, rendering, tooling, and storage. The example below shows the minimal structure of a message processor:
 
 ```typescript
 import type { MessageProcessorPlugin } from './plugins/types'
@@ -112,44 +143,39 @@ export class MyPlugin implements MessageProcessorPlugin {
 ```
 
 **Plugin Types:**
-- `message-processor` - Transform messages before/after sending
-- `renderer` - Custom rendering for message content
-- `tool` - Add functions/tools to the chat
-- `storage` - Custom storage backends
-- `ui-extension` - Add custom UI components
+- `message-processor` – Transform messages before or after they are sent to a provider.
+- `renderer` – Customize how content is displayed in the chat transcript.
+- `tool` – Provide callable utilities that models can invoke.
+- `storage` – Implement alternative persistence layers for sessions and metadata.
+- `ui-extension` – Mount additional UI panels or controls.
 
 See `src/plugins/examples/` for more examples.
 
 ## Configuration
 
 Providers can be configured through the Settings panel:
-- Base URL for API endpoints
-- API keys (if required)
-- Model selection
-- Connection testing
+- Base URL or host for each provider endpoint.
+- API keys or access tokens when a provider requires authentication.
+- Default model selection per provider profile.
+- Connection diagnostics for ensuring the backend is reachable.
 
 ## Development
 
-```bash
-# Run development server
-npm run dev
+Use the scripts in `package.json` to streamline your workflow:
 
-# Run Tauri in dev mode
-npm run tauri dev
-
-# Build for production
-npm run build
-npm run tauri build
-```
+- `npm run dev` – Runs the Vite development server with fast HMR.
+- `npm run tauri dev` – Boots the Tauri desktop shell for local testing.
+- `npm run build` – Produces optimized assets for deployment.
+- `npm run tauri build` – Generates platform-specific binaries.
 
 ## Tech Stack
 
-- **Tauri** - Cross-platform desktop framework
-- **React** - UI framework
-- **TypeScript** - Type safety
-- **TailwindCSS** - Styling
-- **Vite** - Build tool
-- **Lucide React** - Icons
+- **Tauri** – Lightweight desktop shell that wraps the web UI.
+- **React** – Component-driven UI development.
+- **TypeScript** – Static typing across the entire application.
+- **TailwindCSS** – Utility-first styling system.
+- **Vite** – Modern build tooling for fast iteration.
+- **Lucide React** – Icon library used throughout the interface.
 
 ## License
 

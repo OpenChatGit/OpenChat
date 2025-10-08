@@ -7,6 +7,8 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+DEVELOPMENT.md
+
 node_modules
 src-tauri/target
 src-tauri/.fingerprint
