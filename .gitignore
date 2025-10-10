@@ -8,6 +8,7 @@ pnpm-debug.log*
 lerna-debug.log*
 
 DEVELOPMENT.md
+MEMORY_SYSTEM_PROGRESS.md
 
 node_modules
 src-tauri/target
