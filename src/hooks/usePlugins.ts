@@ -1,12 +1,11 @@
 import { useState, useEffect, useMemo } from 'react'
 import { PluginManager } from '../plugins/PluginManager'
-import { MarkdownRendererPlugin } from '../plugins/core/markdown-renderer'
-import { MessageExportPlugin } from '../plugins/optional/message-export'
-import { WebSearchToolPlugin } from '../global_tools/web-search/plugin'
+import { loadAllPlugins } from '../plugins/loader'
 import type { Plugin, PluginContext } from '../plugins/types'
 
 export function usePlugins() {
   const [plugins, setPlugins] = useState<Plugin[]>([])
+  const [loading, setLoading] = useState(true)
   
   // Create plugin manager with context
   const pluginManager = useMemo(() => {
@@ -19,20 +18,35 @@ export function usePlugins() {
     return new PluginManager(context)
   }, [])
 
-  // Initialize plugins
+  // Initialize plugins with auto-discovery
   useEffect(() => {
     const initPlugins = async () => {
-      // Register CORE plugins (always enabled, cannot be disabled)
-      await pluginManager.register(new MarkdownRendererPlugin())
+      try {
+        setLoading(true)
+        
+        // Auto-discover and load all plugins
+        const { core, external } = await loadAllPlugins()
+        
+        // Register CORE plugins (always enabled, cannot be disabled)
+        console.log('[Plugin System] Registering core plugins...')
+        for (const plugin of core) {
+          await pluginManager.register(plugin)
+        }
 
-      // Register OPTIONAL plugins (can be enabled/disabled by user)
-      await pluginManager.register(new MessageExportPlugin())
+        // Register EXTERNAL plugins (can be enabled/disabled by user)
+        console.log('[Plugin System] Registering external plugins...')
+        for (const plugin of external) {
+          await pluginManager.register(plugin)
+        }
 
-      // Register GLOBAL TOOLS (available to all users)
-      await pluginManager.register(new WebSearchToolPlugin())
-
-      // Update state
-      setPlugins(pluginManager.getAll())
+        // Update state
+        setPlugins(pluginManager.getAll())
+        console.log(`[Plugin System] Initialized ${pluginManager.getAll().length} plugin(s)`)
+      } catch (error) {
+        console.error('[Plugin System] Failed to initialize plugins:', error)
+      } finally {
+        setLoading(false)
+      }
     }
 
     initPlugins()
@@ -61,6 +75,7 @@ export function usePlugins() {
   return {
     plugins,
     pluginManager,
+    loading,
     enablePlugin,
     disablePlugin,
     registerPlugin,

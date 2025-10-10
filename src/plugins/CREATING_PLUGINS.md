@@ -186,24 +186,47 @@ export class MyToolPlugin implements ToolPlugin {
 
 ### Core Plugins
 Location: `src/plugins/core/your-plugin/`
+- **Developed by OpenChat Team**
 - Cannot be disabled by users
 - Essential for app functionality
 - Set `"core": true` in plugin.json
+- Examples: markdown-renderer, web-search
 
-### Optional Plugins
-Location: `src/plugins/optional/your-plugin/`
+### External Plugins
+Location: `src/plugins/external/your-plugin/`
+- **Community and third-party plugins**
 - Can be enabled/disabled by users
 - Add extra functionality
 - Set `"core": false` in plugin.json
+- Examples: message-export, custom integrations
 
 ## 5. Registering Your Plugin
 
-Add your plugin to `src/hooks/usePlugins.ts`:
-
+### For Core Plugins (OpenChat Team only)
+1. Add export to `src/plugins/core/index.ts`:
 ```typescript
-import { YourPlugin } from '../plugins/optional/your-plugin'
+export { YourPlugin } from './your-plugin'
+```
 
-// In the useEffect:
+2. Register in `src/hooks/usePlugins.ts`:
+```typescript
+import { YourPlugin } from '../plugins/core'
+
+// In the initPlugins function under CORE plugins:
+await pluginManager.register(new YourPlugin())
+```
+
+### For External Plugins (Community)
+1. Add export to `src/plugins/external/index.ts`:
+```typescript
+export { YourPlugin } from './your-plugin'
+```
+
+2. Register in `src/hooks/usePlugins.ts`:
+```typescript
+import { YourPlugin } from '../plugins/external'
+
+// In the initPlugins function under EXTERNAL plugins:
 await pluginManager.register(new YourPlugin())
 ```
 
@@ -276,8 +299,10 @@ onUnload() {
 ## 10. Example Plugins
 
 See these folders for examples:
-- `src/plugins/core/markdown-renderer/` - Renderer plugin
-- `src/plugins/optional/message-export/` - Tool plugin
+- `src/plugins/core/markdown-renderer/` - Core renderer plugin
+- `src/plugins/core/web-search/` - Core tool plugin with RAG
+- `src/plugins/external/message-export/` - External tool plugin
+- `src/plugins/external/examples/` - Example plugins for learning
 - `src/plugins/PLUGIN_TEMPLATE/` - Template to copy
 
 ## Need Help?

@@ -1,6 +1,6 @@
 // Web Search Tool Plugin
 
-import type { ToolPlugin } from '../../plugins/types'
+import type { ToolPlugin } from '../../types'
 import { WebSearchTool } from './index'
 import type { SearchQuery } from './types'
 
@@ -10,11 +10,41 @@ export class WebSearchToolPlugin implements ToolPlugin {
     name: 'Web Search',
     version: '1.0.0',
     description: 'Search the web and retrieve relevant information using RAG (Retrieval-Augmented Generation)',
-    author: 'OpenChat',
+    author: 'OpenChat Team',
     type: 'tool' as const,
     appVersion: '1.0.0',
     enabled: true,
+    core: true,
   }
+
+  tools = [
+    {
+      type: 'function' as const,
+      function: {
+        name: 'web_search',
+        description: 'Search the web for current, real-time information. Use this tool proactively whenever the user asks about current events, recent information, specific facts, statistics, products, companies, or anything that might have changed since your training data. Returns relevant content and sources with citations.',
+        parameters: {
+          type: 'object' as const,
+          properties: {
+            query: {
+              type: 'string',
+              description: 'The search query - be specific and include relevant keywords for best results',
+            },
+            maxResults: {
+              type: 'number',
+              description: 'Maximum number of results to return (default: 5, recommended: 3-7)',
+            },
+            format: {
+              type: 'string',
+              description: 'Output format (default: text)',
+              enum: ['text', 'json'],
+            },
+          },
+          required: ['query'],
+        },
+      },
+    },
+  ]
 
   private searchTool: WebSearchTool
 
@@ -30,37 +60,12 @@ export class WebSearchToolPlugin implements ToolPlugin {
     })
   }
 
-  getTool() {
-    return {
-      name: 'web_search',
-      description: 'Search the web for information. Returns relevant content and sources that can be used to answer questions.',
-      parameters: {
-        query: {
-          type: 'string',
-          description: 'The search query',
-          required: true,
-        },
-        maxResults: {
-          type: 'number',
-          description: 'Maximum number of results to return (default: 5)',
-          required: false,
-        },
-        format: {
-          type: 'string',
-          enum: ['text', 'json'],
-          description: 'Output format (default: text)',
-          required: false,
-        },
-      },
+  async executeTool(toolName: string, args: Record<string, any>): Promise<string> {
+    if (toolName !== 'web_search') {
+      throw new Error(`Unknown tool: ${toolName}`)
     }
-  }
 
-  async execute(params: {
-    query: string
-    maxResults?: number
-    format?: 'text' | 'json'
-  }): Promise<string> {
-    const { query, maxResults = 5, format = 'text' } = params
+    const { query, maxResults = 5, format = 'text' } = args
 
     if (!query || query.trim().length === 0) {
       return 'Error: Search query cannot be empty'

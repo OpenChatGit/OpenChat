@@ -3,8 +3,9 @@ import type { ChatSession, Message, ProviderConfig } from '../types'
 import { ProviderFactory } from '../providers'
 import { generateId } from '../lib/utils'
 import { performWebSearch } from '../lib/webSearchHelper'
+import type { PluginManager } from '../plugins/PluginManager'
 
-export function useChat() {
+export function useChat(pluginManager?: PluginManager) {
   const [sessions, setSessions] = useState<ChatSession[]>([])
   const [currentSession, setCurrentSession] = useState<ChatSession | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
@@ -100,8 +101,18 @@ export function useChat() {
       webSearchEnabled,
     })
 
+    // Process outgoing message through plugins
+    let processedContent = content
+    if (pluginManager) {
+      try {
+        processedContent = await pluginManager.processOutgoing(content)
+      } catch (error) {
+        console.error('Error processing outgoing message:', error)
+      }
+    }
+
     // Check if user message already exists (when creating new session with initial message)
-    const hasUserMessage = session.messages.some(m => m.role === 'user' && m.content === content)
+    const hasUserMessage = session.messages.some(m => m.role === 'user' && m.content === processedContent)
     
     let userMessage: Message
     
@@ -109,13 +120,13 @@ export function useChat() {
       userMessage = {
         id: generateId(),
         role: 'user',
-        content,
+        content: processedContent,
         timestamp: Date.now(),
       }
       addMessage(session.id, userMessage)
     } else {
       // Use existing message
-      userMessage = session.messages.find(m => m.role === 'user' && m.content === content)!
+      userMessage = session.messages.find(m => m.role === 'user' && m.content === processedContent)!
     }
 
     // Auto-generate title from first message
@@ -214,19 +225,7 @@ export function useChat() {
         ? previousMessages 
         : [...previousMessages, userMessage]
 
-      const todayIso = new Date().toISOString().split('T')[0]
-      const systemReminder = {
-        role: 'system' as const,
-        content: [
-          `Today's date is ${todayIso}.`,
-          'Treat the aggregated web search context as the most up-to-date information available.',
-          'When multiple independent sources agree, prefer their data over any outdated training knowledge.',
-          'If new evidence contradicts prior assumptions, update your answer accordingly and cite the sources.',
-        ].join(' '),
-      }
-
       let messages = [
-        systemReminder,
         ...allMessages.map(m => ({
           role: m.role,
           content: m.content,
@@ -237,6 +236,32 @@ export function useChat() {
       if (webSearchContext) {
         console.log('📦 Adding web search context to messages')
         console.log('📏 Context length:', webSearchContext.length, 'characters')
+        
+        // Check if the user's question requires date context
+        const userQuery = userMessage.content.toLowerCase()
+        const dateKeywords = [
+          'today', 'now', 'current', 'latest', 'recent', 'this week', 'this month', 'this year',
+          'when', 'date', 'time', '2024', '2025', 'yesterday', 'tomorrow'
+        ]
+        const needsDateContext = dateKeywords.some(keyword => userQuery.includes(keyword))
+        
+        let systemReminderContent = [
+          'Treat the aggregated web search context as the most up-to-date information available.',
+          'When multiple independent sources agree, prefer their data over any outdated training knowledge.',
+          'If new evidence contradicts prior assumptions, update your answer accordingly and cite the sources.',
+        ]
+        
+        // Only add date if the query actually needs it
+        if (needsDateContext) {
+          const todayIso = new Date().toISOString().split('T')[0]
+          systemReminderContent.unshift(`Today's date is ${todayIso}.`)
+        }
+        
+        const systemReminder = {
+          role: 'system' as const,
+          content: systemReminderContent.join(' '),
+        }
+        
         messages = [
           {
             role: 'system',
@@ -246,6 +271,7 @@ ${webSearchContext}
 
 IMPORTANT: Always cite the sources from the web search results in your answer.`,
           },
+          systemReminder,
           ...messages,
         ]
         console.log('✅ Messages array now has', messages.length, 'messages')
@@ -292,6 +318,10 @@ IMPORTANT: Always cite the sources from the web search results in your answer.`,
         setTimeout(processQueue, delay)
       }
       
+      console.log('[useChat] Calling provider.sendMessage with streaming enabled')
+      console.log('[useChat] Model:', model)
+      console.log('[useChat] Messages count:', messages.length)
+      
       await provider.sendMessage(
         {
           model,
@@ -301,6 +331,9 @@ IMPORTANT: Always cite the sources from the web search results in your answer.`,
         },
         (chunk) => {
           // Add chunk to queue
+          if (chunkCount === 0) {
+            console.log('[useChat] Received first chunk:', chunk.slice(0, 50))
+          }
           chunkQueue.push(chunk)
           
           // Start processing if not already running
@@ -309,6 +342,8 @@ IMPORTANT: Always cite the sources from the web search results in your answer.`,
           }
         }
       )
+      
+      console.log('[useChat] provider.sendMessage completed')
       
       // Mark streaming as complete
       streamingComplete = true

@@ -1,14 +1,47 @@
-// llama.cpp server provider implementation
-import { BaseProvider } from './base'
-import type { ChatCompletionRequest, ChatCompletionResponse, ModelInfo, StreamResponse } from '../types'
+// LM Studio provider implementation
+import { BaseProvider } from '../base'
+import type { ChatCompletionRequest, ChatCompletionResponse, ModelInfo, StreamResponse } from '../../types'
 
-export class LlamaCppProvider extends BaseProvider {
+export class LMStudioProvider extends BaseProvider {
+  private buildHeaders(includeJson = false): HeadersInit {
+    const headers: HeadersInit = {}
+
+    if (includeJson) {
+      headers['Content-Type'] = 'application/json'
+    }
+
+    if (this.config.apiKey) {
+      headers['Authorization'] = `Bearer ${this.config.apiKey}`
+    }
+
+    return headers
+  }
+
   async listModels(): Promise<ModelInfo[]> {
-    // llama.cpp doesn't have a models endpoint, return a default entry
-    return [{
-      name: 'llama.cpp-model',
-      details: { info: 'Model loaded in llama.cpp server' }
-    }]
+    try {
+      const response = await this.fetchWithTimeout(
+        `${this.config.baseUrl}/v1/models`,
+        {
+          method: 'GET',
+          headers: this.buildHeaders(),
+        },
+        8000 // 8s timeout for model listing
+      )
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch models: ${response.statusText}`)
+      }
+
+      const data = await response.json()
+      return (data.data || []).map((model: any) => ({
+        name: model.id,
+        size: model.size,
+        details: model,
+      }))
+    } catch (error) {
+      console.error('LM Studio listModels error:', error)
+      return []
+    }
   }
 
   async sendMessage(
@@ -24,33 +57,41 @@ export class LlamaCppProvider extends BaseProvider {
       temperature: request.temperature,
       max_tokens: request.max_tokens,
       top_p: request.top_p,
+      frequency_penalty: request.frequency_penalty,
+      presence_penalty: request.presence_penalty,
     }
 
     if (!onChunk) {
       // Non-streaming request
-      const response = await this.fetchWithTimeout(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
+      const response = await this.fetchWithTimeout(
+        url,
+        {
+          method: 'POST',
+          headers: this.buildHeaders(true),
+          body: JSON.stringify(body),
+        }
+      )
 
       if (!response.ok) {
-        throw new Error(`llama.cpp request failed: ${response.statusText}`)
+        throw new Error(`LM Studio request failed: ${response.statusText}`)
       }
 
       const data: ChatCompletionResponse = await response.json()
       return data.choices[0]?.message?.content || ''
     }
 
-    // Streaming request (OpenAI-compatible format)
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
+    // Streaming request
+    const response = await this.fetchWithTimeout(
+      url,
+      {
+        method: 'POST',
+        headers: this.buildHeaders(true),
+        body: JSON.stringify(body),
+      }
+    )
 
     if (!response.ok) {
-      throw new Error(`llama.cpp request failed: ${response.statusText}`)
+      throw new Error(`LM Studio request failed: ${response.statusText}`)
     }
 
     const reader = response.body?.getReader()
@@ -99,23 +140,16 @@ export class LlamaCppProvider extends BaseProvider {
   async testConnection(): Promise<boolean> {
     try {
       const response = await this.fetchWithTimeout(
-        `${this.config.baseUrl}/health`,
-        { method: 'GET' },
+        `${this.config.baseUrl}/v1/models`,
+        {
+          method: 'GET',
+          headers: this.buildHeaders(),
+        },
         5000
       )
       return response.ok
     } catch (error) {
-      // Try alternative endpoint
-      try {
-        const response = await this.fetchWithTimeout(
-          `${this.config.baseUrl}/v1/models`,
-          { method: 'GET' },
-          5000
-        )
-        return response.ok
-      } catch {
-        return false
-      }
+      return false
     }
   }
 }

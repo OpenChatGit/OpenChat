@@ -84,6 +84,12 @@ export class PluginManager {
       .filter(p => p.metadata.type === type && p.metadata.enabled) as T[]
   }
 
+  // Get UI extensions by location
+  getUIExtensionsByLocation(location: string): any[] {
+    const uiPlugins = this.getByType('ui-extension')
+    return uiPlugins.filter((plugin: any) => plugin.location === location)
+  }
+
   // Get a specific plugin
   get<T extends Plugin>(pluginId: string): T | undefined {
     return this.plugins.get(pluginId) as T | undefined
@@ -97,5 +103,63 @@ export class PluginManager {
   // Get enabled plugins count
   getEnabledCount(): number {
     return Array.from(this.plugins.values()).filter(p => p.metadata.enabled).length
+  }
+
+  // Get all available tools from tool plugins
+  getAllTools() {
+    const toolPlugins = this.getByType('tool')
+    const tools: any[] = []
+    
+    for (const plugin of toolPlugins) {
+      if ('tools' in plugin && Array.isArray(plugin.tools)) {
+        tools.push(...plugin.tools)
+      }
+    }
+    
+    return tools
+  }
+
+  // Execute a tool by name
+  async executeTool(toolName: string, args: Record<string, any>): Promise<string> {
+    const toolPlugins = this.getByType('tool')
+    
+    for (const plugin of toolPlugins) {
+      if ('tools' in plugin && 'executeTool' in plugin) {
+        const hasThisTool = plugin.tools.some((t: any) => t.function.name === toolName)
+        if (hasThisTool) {
+          return await plugin.executeTool(toolName, args)
+        }
+      }
+    }
+    
+    throw new Error(`Tool not found: ${toolName}`)
+  }
+
+  // Process outgoing message through all message processor plugins
+  async processOutgoing(content: string): Promise<string> {
+    const processors = this.getByType('message-processor')
+    let processed = content
+    
+    for (const plugin of processors) {
+      if ('processOutgoing' in plugin && plugin.processOutgoing) {
+        processed = await plugin.processOutgoing(processed)
+      }
+    }
+    
+    return processed
+  }
+
+  // Process incoming message through all message processor plugins
+  async processIncoming(content: string): Promise<string> {
+    const processors = this.getByType('message-processor')
+    let processed = content
+    
+    for (const plugin of processors) {
+      if ('processIncoming' in plugin && plugin.processIncoming) {
+        processed = await plugin.processIncoming(processed)
+      }
+    }
+    
+    return processed
   }
 }

@@ -1,0 +1,10 @@
+{
+  "id": "reasoning-detector",
+  "name": "Reasoning Detector",
+  "version": "1.0.0",
+  "description": "Detects and separates reasoning from final answers in AI messages",
+  "author": "OpenChat Team",
+  "type": "reasoning-detector",
+  "appVersion": "1.0.0",
+  "core": true
+}

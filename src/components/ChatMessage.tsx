@@ -1,86 +1,41 @@
 import { useState } from 'react'
-import type { Message } from '../types'
-import type { RendererPlugin } from '../plugins/types'
-import { ReasoningBlock } from './ReasoningBlock'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faCheck } from '@fortawesome/free-solid-svg-icons'
+import { ReasoningBlock } from '../plugins/core/reasoning-detector'
+import type { Message } from '../types'
+import type { RendererPlugin, ReasoningDetectorPlugin, UIExtensionPlugin } from '../plugins/types'
 
 interface ChatMessageProps {
   message: Message
   rendererPlugins?: RendererPlugin[]
+  reasoningDetector?: ReasoningDetectorPlugin
+  uiExtensions?: UIExtensionPlugin[]
 }
 
-export function ChatMessage({ message, rendererPlugins = [] }: ChatMessageProps) {
+export function ChatMessage({ message, rendererPlugins = [], reasoningDetector, uiExtensions = [] }: ChatMessageProps) {
   const isUser = message.role === 'user'
   const [isCopied, setIsCopied] = useState(false)
 
   // Try to find a renderer plugin that can handle this content
   const renderer = rendererPlugins.find(plugin => plugin.canRender(message.content))
   
-  // Parse reasoning blocks from AI messages
+  // Use reasoning detector plugin if available, otherwise return as text
   const parseReasoning = (content: string) => {
-    // Check if content has <think> tags
-    if (!content.includes('<think>')) {
-      return [{ type: 'text', content }]
+    if (reasoningDetector) {
+      return reasoningDetector.parseReasoning(content)
     }
-    
-    const parts: Array<{ type: string; content: string }> = []
-    
-    // Handle incomplete reasoning (during streaming)
-    if (content.includes('<think>') && !content.includes('</think>')) {
-      const thinkIndex = content.indexOf('<think>')
-      // Add text before <think> if any
-      if (thinkIndex > 0) {
-        const beforeText = content.slice(0, thinkIndex).trim()
-        if (beforeText) {
-          parts.push({ type: 'text', content: beforeText })
-        }
-      }
-      // Add incomplete reasoning content (everything after <think>)
-      const reasoningContent = content.slice(thinkIndex + 7).trim() // +7 for '<think>'
-      if (reasoningContent) {
-        parts.push({ type: 'reasoning', content: reasoningContent })
-      }
-      return parts.length > 0 ? parts : []
-    }
-    
-    // Handle complete reasoning blocks
-    const thinkRegex = /<think>([\s\S]*?)<\/think>/g
-    let match
-    let lastIndex = 0
-    
-    while ((match = thinkRegex.exec(content)) !== null) {
-      // Add text before <think>
-      if (match.index > lastIndex) {
-        const beforeText = content.slice(lastIndex, match.index).trim()
-        if (beforeText) {
-          parts.push({ type: 'text', content: beforeText })
-        }
-      }
-      // Add reasoning block
-      const reasoningContent = match[1].trim()
-      if (reasoningContent) {
-        parts.push({ type: 'reasoning', content: reasoningContent })
-      }
-      lastIndex = match.index + match[0].length
-    }
-    
-    // Add remaining text after last </think>
-    if (lastIndex < content.length) {
-      const remainingText = content.slice(lastIndex).trim()
-      if (remainingText) {
-        parts.push({ type: 'text', content: remainingText })
-      }
-    }
-    
-    return parts.length > 0 ? parts : []
+    // Fallback: no reasoning detection
+    return [{ type: 'text', content }]
   }
 
   if (isUser) {
     // User message - right aligned with gray bubble
+    // Get UI extensions for user message footer
+    const userFooterExtensions = uiExtensions.filter(ext => ext.location === 'user-message-footer')
+
     return (
       <div className="px-4 py-3">
-        <div className="max-w-3xl mx-auto flex justify-end">
+        <div className="max-w-3xl mx-auto flex flex-col items-end gap-1">
           <div 
             className="max-w-[70%] rounded-3xl px-5 py-3"
             style={{ backgroundColor: '#2F2F2F' }}
@@ -89,6 +44,11 @@ export function ChatMessage({ message, rendererPlugins = [] }: ChatMessageProps)
               {message.content}
             </div>
           </div>
+          {/* Render UI extensions for user message footer */}
+          {userFooterExtensions.map((extension) => {
+            const Component = extension.component
+            return <Component key={extension.metadata.id} message={message} />
+          })}
         </div>
       </div>
     )
@@ -100,7 +60,10 @@ export function ChatMessage({ message, rendererPlugins = [] }: ChatMessageProps)
       <div className="max-w-3xl mx-auto">
         <div className="prose prose-invert max-w-none mb-2">
           {(() => {
-            const hasReasoningTag = message.content && message.content.includes('<think>')
+            // Check for any reasoning tag (case-insensitive)
+            const hasReasoningTag = message.content && (
+              /<(reasoning|think)>/i.test(message.content)
+            )
             
             // If no content yet, show "Reasoning..." indicator
             if (!message.content) {
@@ -113,6 +76,9 @@ export function ChatMessage({ message, rendererPlugins = [] }: ChatMessageProps)
             }
             
             const parts = parseReasoning(message.content)
+            
+            // Debug
+            console.log('Parsed parts:', parts.length, parts.map(p => ({ type: p.type, length: p.content.length })))
             
             // If parsing returns empty but we have content starting with <think>, show reasoning indicator
             if (parts.length === 0 && hasReasoningTag) {
@@ -138,8 +104,9 @@ export function ChatMessage({ message, rendererPlugins = [] }: ChatMessageProps)
               <>
                 {parts.map((part, index) => {
                   if (part.type === 'reasoning') {
-                    // Check if reasoning is complete (has closing tag)
-                    const isComplete = message.content.includes('</think>')
+                    // Check if reasoning is complete (has closing tag OR has text content after it)
+                    const isComplete = /<\/(reasoning|think)>/i.test(message.content) || 
+                                      (index < parts.length - 1 && parts[index + 1].type === 'text')
                     return <ReasoningBlock key={index} content={part.content} isComplete={isComplete} />
                   }
                   
@@ -152,15 +119,15 @@ export function ChatMessage({ message, rendererPlugins = [] }: ChatMessageProps)
                   ) : (
                     <div 
                       key={index} 
-                      className="text-base leading-relaxed"
+                      className="text-base leading-relaxed space-y-4"
                       style={{ 
                         color: 'var(--color-foreground)',
                         lineHeight: '1.75'
                       }}
                     >
-                      {textContent.split('\n').map((line, i) => (
-                        <p key={i} className={i > 0 ? 'mt-4' : ''}>
-                          {line || '\u00A0'}
+                      {textContent.split('\n').filter(l => l.trim()).map((line, i) => (
+                        <p key={i}>
+                          {line}
                         </p>
                       ))}
                     </div>
@@ -177,8 +144,10 @@ export function ChatMessage({ message, rendererPlugins = [] }: ChatMessageProps)
             {/* Copy Button */}
             <button
               onClick={() => {
-                // Remove <think>...</think> blocks from content before copying
-                const contentWithoutReasoning = message.content.replace(/<think>[\s\S]*?<\/think>/g, '').trim()
+                // Remove all reasoning blocks from content before copying (case-insensitive)
+                const contentWithoutReasoning = message.content
+                  .replace(/<(reasoning|think)>[\s\S]*?<\/(reasoning|think)>/gi, '')
+                  .trim()
                 navigator.clipboard.writeText(contentWithoutReasoning)
                 
                 // Show checkmark animation

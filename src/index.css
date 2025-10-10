@@ -12,8 +12,8 @@
   --color-card-foreground: #ECECEC;
   --color-popover: #1B1B1C;
   --color-popover-foreground: #ECECEC;
-  --color-primary: #10A37F;
-  --color-primary-foreground: #FFFFFF;
+  --color-primary: #ECECEC;
+  --color-primary-foreground: #151517;
   --color-secondary: #2A2A2C;
   --color-secondary-foreground: #ECECEC;
   --color-muted: #2A2A2C;
@@ -24,7 +24,7 @@
   --color-destructive-foreground: #FFFFFF;
   --color-border: #2A2A2C;
   --color-input: #2A2A2C;
-  --color-ring: #10A37F;
+  --color-ring: #ECECEC;
   --radius: 0.5rem;
 }
 
