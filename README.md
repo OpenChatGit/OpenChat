@@ -1,4 +1,4 @@
-![OpenChat screenshot](https://i.imgur.com/UnQdl8P.png)
+![OpenChat screenshot](https://i.imgur.com/h8yBEzR.png)
 
 # OpenChat
 
@@ -11,6 +11,7 @@ OpenChat is a modular, cross-platform LLM chat application built with Tauri, Rea
 - [Getting Started](#getting-started)
 - [Architecture](#architecture)
 - [Adding a New Provider](#adding-a-new-provider)
+- [Advanced Plugin System](#advanced-plugin-system)
 - [Creating Custom Plugins](#creating-custom-plugins)
 - [Configuration](#configuration)
 - [Development](#development)
@@ -20,7 +21,12 @@ OpenChat is a modular, cross-platform LLM chat application built with Tauri, Rea
 
 ## Features
 
-- **Modern interface** – ChatGPT-inspired layout with full dark-mode support.
+- **Modern interface** – ChatGPT-inspired layout with clean white/dark theme.
+- **Advanced Plugin System** – Robust, generic plugin architecture with UI extensions (IMPROVED!)
+- **Global Tooling System** – Flexible plugin architecture for AI tools
+- **Memory System** – AI can create and retrieve memories across conversations
+- **Intelligent Web Search** – Automatic web search with RAG processing and source citations
+- **Reasoning Block** – Collapsible reasoning display for models that use `<think>` tags
 - **Modular provider system** – Plug in new LLM providers without touching core code.
 - **Plugin runtime** – Extend the chat experience with custom plugins.
 - **Native performance** – Tauri application shell keeps the UI fast and lightweight.
@@ -29,7 +35,6 @@ OpenChat is a modular, cross-platform LLM chat application built with Tauri, Rea
 - **Flexible configuration** – Switch providers, models, and credentials from the UI.
 - **Rich Markdown support** – Render code blocks, tables, and inline formatting.
 - **Mathematical rendering** – Render LaTeX expressions through KaTeX.
-- **Puppeteer web search** – Built-in headless browser pipeline that augments answers with fresh web context via RAG.
 
 ## Supported Providers
 
@@ -92,14 +97,16 @@ src/
 │   ├── lmstudio.ts  # LM Studio provider
 │   ├── llamacpp.ts  # llama.cpp provider
 │   └── factory.ts   # Provider factory
-├── plugins/         # Plugin system
+├── plugins/         # Plugin system (auto-discovery)
+│   ├── core/        # Core plugins (always enabled)
+│   │   ├── markdown-renderer/  # Markdown rendering
+│   │   ├── web-search/         # Web search tool
+│   │   └── memory/             # Memory system tool (NEW!)
+│   ├── external/    # Community plugins (optional)
+│   │   └── message-export/     # Export conversations
 │   ├── types.ts     # Plugin type definitions
-│   ├── PluginManager.ts # Plugin lifecycle management
-│   ├── builtin/     # Built-in plugins
-│   │   ├── MarkdownPlugin.tsx
-│   │   ├── CodeCopyPlugin.tsx
-│   │   └── MessageExportPlugin.ts
-│   └── examples/    # Example plugins
+│   ├── PluginManager.ts # Plugin lifecycle & tool execution
+│   └── loader.ts    # Auto-discovery system
 ├── hooks/           # React hooks
 │   ├── useChat.ts   # Chat state management
 │   ├── useProviders.ts # Provider management
@@ -108,17 +115,141 @@ src/
 └── lib/             # Utility functions
 ```
 
-## Web Search Pipeline
+## Global Tooling System
 
-OpenChat includes a Puppeteer-driven search workflow that enriches model answers with current web information:
+OpenChat features a **flexible tool plugin architecture** that allows AI models to use various tools to enhance their capabilities.
 
-- **Coordinator** – `WebSearchTool` in `src/global_tools/web-search/index.ts` orchestrates querying, scraping, caching, and formatting.
-- **Headless scraping** – `PuppeteerScraper` in `src/global_tools/web-search/puppeteerScraper.ts` launches the user’s Chromium-based browser through `puppeteer-core` to render dynamic pages.
-- **Fetch fallback** – `WebScraper` in `src/global_tools/web-search/scraper.ts` retrieves HTML via the Tauri backend when no local browser is available.
-- **RAG processing** – `RAGProcessor` in `src/global_tools/web-search/rag.ts` chunks content, ranks relevance, and synthesizes summaries with citations.
-- **Automatic triggers** – `performWebSearch()` in `src/lib/webSearchHelper.ts` decides when to call the pipeline and injects the formatted evidence into the model prompt.
+### Available Tools
 
-The system queries DuckDuckGo without API keys, handles JavaScript-heavy pages, and returns structured context that boosts answer reliability for time-sensitive questions.
+#### 🔍 Web Search (`{web_search}`)
+- Searches the web for current information
+- Uses RAG (Retrieval-Augmented Generation) for context processing
+- Provides source citations
+- **Usage**: Automatically triggered for current events, recent info, facts
+
+#### 🧠 Memory System (`{create_memory}`, `{search_memories}`, `{list_memories}`)
+- Create persistent memories across conversations
+- Search through stored information
+- Tag and organize memories
+- **Usage**: "Remember that I prefer dark mode" → AI creates memory
+
+### How It Works
+
+```
+User: "What are the best laptops in 2025?"
+
+AI Decision:
+1. Recognizes "best" and "2025" require current information
+2. Calls {web_search} with query "best laptops 2024"
+3. Receives search results with sources
+4. Provides structured answer with citations
+```
+
+### Tool Call Syntax
+
+Tools use a simple syntax: `{tool_name}` with JSON parameters:
+```json
+{
+  "tool_calls": [{
+    "function": {
+      "name": "create_memory",
+      "arguments": {
+        "content": "User prefers TypeScript",
+        "tags": ["preference"]
+      }
+    }
+  }]
+}
+```
+
+For detailed documentation, see [AGENT_SYSTEM.md](./AGENT_SYSTEM.md)
+
+## Advanced Plugin System
+
+OpenChat features a **robust, generic plugin system** that allows you to extend functionality without modifying core code. The system is fully dynamic - plugins are automatically enabled/disabled based on their state.
+
+### Key Improvements
+
+- ✅ **Generic Architecture** – No hardcoding, works with any plugin
+- ✅ **Location-Based Rendering** – Plugins define where they appear
+- ✅ **Automatic Management** – Enable/disable plugins dynamically
+- ✅ **Type-Safe** – Full TypeScript support
+- ✅ **Scalable** – Add unlimited plugins without code changes
+
+### Plugin Types
+
+| Type | Purpose | Example |
+|------|---------|---------|
+| `ui-extension` | Add UI components | Timestamps, reactions, custom buttons |
+| `message-processor` | Transform messages | Auto-translate, filters, formatters |
+| `renderer` | Custom rendering | LaTeX, diagrams, syntax highlighting |
+| `tool` | Add AI functions | Web search, calculations, API calls |
+| `storage` | Custom storage | Cloud sync, encryption |
+| `reasoning-detector` | Parse reasoning | Extract thinking process |
+
+### UI Extension Locations
+
+UI extensions can be placed in specific locations:
+
+- `user-message-footer` – Below user messages
+- `ai-message-footer` – Below AI responses
+- `sidebar` – In the sidebar panel
+- `toolbar` – In the main toolbar
+- `message-actions` – Message action buttons
+- `settings` – Settings panel
+
+### Example: Timestamp Plugin
+
+**Plugin Disabled:**
+
+![Plugin OFF - No timestamps](https://i.imgur.com/wafI78P.png)
+
+**Plugin Enabled:**
+
+![Plugin ON - Timestamps visible](https://i.imgur.com/nIp5XiE.png)
+
+### Comparison: Before & After
+
+| Without Plugin | With Plugin |
+|----------------|-------------|
+| ![Before](https://i.imgur.com/PlNgr1x.png) | ![After](https://i.imgur.com/N1KusWt.png) |
+
+### How It Works
+
+```typescript
+// 1. Plugin defines its location and component
+export class TimestampPlugin implements UIExtensionPlugin {
+  metadata = { enabled: true, type: 'ui-extension' }
+  location = 'user-message-footer'
+  component = TimestampDisplay
+}
+
+// 2. System automatically loads enabled plugins
+const uiExtensions = pluginManager.getByType('ui-extension')
+
+// 3. Components render at specified locations
+{uiExtensions
+  .filter(ext => ext.location === 'user-message-footer')
+  .map(ext => <ext.component message={message} />)
+}
+```
+
+**Result:** Plugin enabled → Component renders. Plugin disabled → Component hidden. No code changes needed!
+
+### Creating Your Own Plugin
+
+See [Creating Custom Plugins](#creating-custom-plugins) for detailed instructions and the plugin template.
+
+## Intelligent Web Search
+
+OpenChat includes an intelligent web search system that enriches model answers with current web information:
+
+- **Coordinator** – `WebSearchTool` in `src/plugins/core/web-search/index.ts` orchestrates querying, scraping, caching, and formatting.
+- **Web Scraping** – `WebScraper` in `src/plugins/core/web-search/scraper.ts` retrieves and processes web content.
+- **RAG processing** – `RAGProcessor` in `src/plugins/core/web-search/rag.ts` chunks content, ranks relevance, and synthesizes summaries with citations.
+- **Automatic triggers** – The Agent System automatically decides when to search based on context and trigger words.
+
+The system queries DuckDuckGo without API keys and returns structured context with source citations.
 
 ## Adding a New Provider
 
@@ -129,39 +260,56 @@ The system queries DuckDuckGo without API keys, handles JavaScript-heavy pages, 
 
 ## Creating Custom Plugins
 
-OpenChat exposes a plugin API that allows you to extend message processing, rendering, tooling, and storage. The example below shows the minimal structure of a message processor:
+OpenChat features an **auto-discovery plugin system** - just create your plugin folder and it will be automatically loaded!
+
+### Quick Start (3 Steps)
+
+1. **Create plugin folder** in `src/plugins/external/your-plugin/`
+2. **Add required files:**
+   - `plugin.json` - Plugin manifest
+   - `index.ts` - Plugin implementation
+   - `README.md` - Documentation (optional)
+3. **Done!** Your plugin is automatically discovered and loaded
+
+### Example Plugin
 
 ```typescript
-import type { MessageProcessorPlugin } from './plugins/types'
+// src/plugins/external/my-plugin/index.ts
+import type { ToolPlugin, PluginMetadata } from '../../types'
+import manifestData from './plugin.json'
 
-export class MyPlugin implements MessageProcessorPlugin {
-  metadata = {
-    id: 'my-plugin',
-    name: 'My Custom Plugin',
-    version: '1.0.0',
-    description: 'Does something cool',
-    type: 'message-processor' as const,
+export class MyPlugin implements ToolPlugin {
+  metadata: PluginMetadata & { type: 'tool' } = {
+    ...(manifestData as any),
     enabled: true,
   }
 
-  processOutgoing(content: string): string {
-    return content.toUpperCase()
+  getTool() {
+    return {
+      name: 'my_tool',
+      description: 'Does something cool',
+      parameters: {},
+    }
+  }
+
+  async execute(params: Record<string, any>) {
+    return 'Result'
   }
 
   onLoad() {
-    console.log('Plugin loaded!')
+    console.log(`[${this.metadata.name}] loaded`)
   }
 }
 ```
 
 **Plugin Types:**
-- `message-processor` – Transform messages before or after they are sent to a provider.
-- `renderer` – Customize how content is displayed in the chat transcript.
-- `tool` – Provide callable utilities that models can invoke.
-- `storage` – Implement alternative persistence layers for sessions and metadata.
-- `ui-extension` – Mount additional UI panels or controls.
+- `message-processor` – Transform messages before or after they are sent to a provider
+- `renderer` – Customize how content is displayed in the chat transcript
+- `tool` – Provide callable utilities that models can invoke
+- `storage` – Implement alternative persistence layers for sessions and metadata
+- `ui-extension` – Mount additional UI panels or controls
 
-See `src/plugins/examples/` for more examples.
+**For detailed documentation, see [PLUGIN_DEVELOPMENT.md](./PLUGIN_DEVELOPMENT.md)**
 
 ## Configuration
 

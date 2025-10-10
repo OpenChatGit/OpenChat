@@ -140,6 +140,9 @@ export class WebSearchTool {
   }
 }
 
+// Export the main plugin class
+export { WebSearchToolPlugin } from './plugin'
+
 // Export types and classes
 export * from './types'
 export { WebScraper } from './scraper'

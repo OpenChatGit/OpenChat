@@ -6,6 +6,7 @@ export type PluginType =
   | 'tool'               // Add tools/functions to the chat
   | 'storage'            // Custom storage backends
   | 'ui-extension'       // Add UI components
+  | 'reasoning-detector' // Detect reasoning in messages
 
 // Plugin manifest - must be in plugin.json file
 export interface PluginManifest {
@@ -71,15 +72,22 @@ export interface RendererPlugin extends BasePlugin {
 export interface ToolPlugin extends BasePlugin {
   metadata: PluginMetadata & { type: 'tool' }
   
-  // Tool definition
-  getTool(): {
-    name: string
-    description: string
-    parameters: Record<string, any>
-  }
+  // Tool definitions (can provide multiple tools)
+  tools: Array<{
+    type: 'function'
+    function: {
+      name: string
+      description: string
+      parameters: {
+        type: 'object'
+        properties: Record<string, any>
+        required: string[]
+      }
+    }
+  }>
   
-  // Execute the tool
-  execute(params: Record<string, any>): any | Promise<any>
+  // Execute a tool by name
+  executeTool(toolName: string, args: Record<string, any>): any | Promise<any>
 }
 
 // Storage plugin - custom storage backends
@@ -97,10 +105,23 @@ export interface UIExtensionPlugin extends BasePlugin {
   metadata: PluginMetadata & { type: 'ui-extension' }
   
   // Where to render the extension
-  location: 'sidebar' | 'toolbar' | 'message-actions' | 'settings'
+  location: 'sidebar' | 'toolbar' | 'message-actions' | 'settings' | 'user-message-footer' | 'ai-message-footer'
   
   // The component to render
   component: React.ComponentType<any>
+}
+
+// Reasoning Detector plugin - detect reasoning in messages
+export interface ReasoningPart {
+  type: 'reasoning' | 'text'
+  content: string
+}
+
+export interface ReasoningDetectorPlugin extends BasePlugin {
+  metadata: PluginMetadata & { type: 'reasoning-detector' }
+  
+  // Parse content and return reasoning parts
+  parseReasoning(content: string): ReasoningPart[]
 }
 
 export type Plugin = 
@@ -109,3 +130,4 @@ export type Plugin =
   | ToolPlugin 
   | StoragePlugin 
   | UIExtensionPlugin
+  | ReasoningDetectorPlugin

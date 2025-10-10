@@ -2,7 +2,6 @@
 
 import type { ToolCall, ToolCallResult, ToolDefinition } from '../types/tools'
 import type { PluginManager } from '../plugins/PluginManager'
-import type { ToolPlugin } from '../plugins/types'
 
 export class ToolExecutor {
   private pluginManager: PluginManager
@@ -15,24 +14,7 @@ export class ToolExecutor {
    * Get all available tool definitions
    */
   getAvailableTools(): ToolDefinition[] {
-    const toolPlugins = this.pluginManager.getByType<ToolPlugin>('tool')
-    
-    return toolPlugins.map(plugin => {
-      const tool = plugin.getTool()
-      
-      return {
-        type: 'function',
-        function: {
-          name: tool.name,
-          description: tool.description,
-          parameters: {
-            type: 'object',
-            properties: this.convertParameters(tool.parameters),
-            required: this.getRequiredParams(tool.parameters),
-          },
-        },
-      }
-    })
+    return this.pluginManager.getAllTools()
   }
 
   /**
@@ -43,18 +25,10 @@ export class ToolExecutor {
       const functionName = toolCall.function.name
       const args = JSON.parse(toolCall.function.arguments)
 
-      // Find the plugin that provides this tool
-      const toolPlugins = this.pluginManager.getByType<ToolPlugin>('tool')
-      const plugin = toolPlugins.find(p => p.getTool().name === functionName)
-
-      if (!plugin) {
-        throw new Error(`Tool '${functionName}' not found`)
-      }
-
       console.log(`Executing tool: ${functionName}`, args)
 
-      // Execute the tool
-      const result = await plugin.execute(args)
+      // Execute the tool via PluginManager
+      const result = await this.pluginManager.executeTool(functionName, args)
 
       return {
         toolCallId: toolCall.id,
@@ -85,32 +59,6 @@ export class ToolExecutor {
     console.log(`Tool execution completed in ${Date.now() - results[0]?.timestamp || 0}ms`)
     
     return results
-  }
-
-  /**
-   * Convert plugin parameters to OpenAI tool format
-   */
-  private convertParameters(params: Record<string, any>): Record<string, any> {
-    const properties: Record<string, any> = {}
-
-    for (const [key, value] of Object.entries(params)) {
-      properties[key] = {
-        type: value.type || 'string',
-        description: value.description || '',
-        ...(value.enum && { enum: value.enum }),
-      }
-    }
-
-    return properties
-  }
-
-  /**
-   * Get required parameter names
-   */
-  private getRequiredParams(params: Record<string, any>): string[] {
-    return Object.entries(params)
-      .filter(([_, value]) => value.required === true)
-      .map(([key]) => key)
   }
 
   /**

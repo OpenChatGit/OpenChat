@@ -10,6 +10,11 @@ interface ReasoningBlockProps {
 export function ReasoningBlock({ content, isComplete = false }: ReasoningBlockProps) {
   const [isExpanded, setIsExpanded] = useState(false)
 
+  // Remove any remaining reasoning tags from content (case-insensitive)
+  const cleanContent = content
+    .replace(/<\/?(?:reasoning|think)>/gi, '')
+    .trim()
+
   return (
     <div className="mb-4">
       {/* Thinking Header */}
@@ -27,13 +32,17 @@ export function ReasoningBlock({ content, isComplete = false }: ReasoningBlockPr
       {/* Reasoning Content */}
       {isExpanded && (
         <div 
-          className="mt-2 text-sm whitespace-pre-wrap break-words rounded-lg p-3"
+          className="mt-2 text-sm break-words rounded-lg p-3 space-y-2"
           style={{ 
             backgroundColor: 'rgba(255, 255, 255, 0.03)',
             color: '#9CA3AF' // Light gray
           }}
         >
-          {content}
+          {cleanContent.split('\n').map((line, index) => (
+            <p key={index} className={line.trim() ? '' : 'h-2'}>
+              {line.trim() || '\u00A0'}
+            </p>
+          ))}
         </div>
       )}
     </div>

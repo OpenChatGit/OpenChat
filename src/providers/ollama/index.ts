@@ -1,13 +1,14 @@
 // Ollama provider implementation
-import { BaseProvider } from './base'
-import type { ChatCompletionRequest, ModelInfo } from '../types'
+import { BaseProvider } from '../base'
+import type { ChatCompletionRequest, ModelInfo } from '../../types'
 
 export class OllamaProvider extends BaseProvider {
   async listModels(): Promise<ModelInfo[]> {
     try {
       const response = await this.fetchWithTimeout(
         `${this.config.baseUrl}/api/tags`,
-        { method: 'GET' }
+        { method: 'GET' },
+        8000 // 8s timeout for model listing
       )
 
       if (!response.ok) {
@@ -56,13 +57,20 @@ export class OllamaProvider extends BaseProvider {
     }
 
     // Streaming request
+    console.log('[Ollama] Starting streaming request to:', url)
+    console.log('[Ollama] Request body:', JSON.stringify(body, null, 2))
+    
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     })
 
+    console.log('[Ollama] Response status:', response.status, response.statusText)
+
     if (!response.ok) {
+      const errorText = await response.text()
+      console.error('[Ollama] Error response:', errorText)
       throw new Error(`Ollama request failed: ${response.statusText}`)
     }
 
@@ -73,11 +81,16 @@ export class OllamaProvider extends BaseProvider {
 
     const decoder = new TextDecoder()
     let fullContent = ''
+    let chunkCount = 0
 
     try {
+      console.log('[Ollama] Starting to read stream...')
       while (true) {
         const { done, value } = await reader.read()
-        if (done) break
+        if (done) {
+          console.log('[Ollama] Stream complete. Total chunks:', chunkCount, 'Total content length:', fullContent.length)
+          break
+        }
 
         const chunk = decoder.decode(value, { stream: true })
         const lines = chunk.split('\n').filter(line => line.trim())
@@ -88,16 +101,24 @@ export class OllamaProvider extends BaseProvider {
             if (json.message?.content) {
               const content = json.message.content
               fullContent += content
+              chunkCount++
+              if (chunkCount <= 3) {
+                console.log('[Ollama] Chunk', chunkCount, ':', content.slice(0, 50))
+              }
               onChunk(content)
             }
             if (json.done) {
+              console.log('[Ollama] Received done signal')
               return fullContent
             }
           } catch (e) {
-            console.warn('Failed to parse chunk:', line)
+            console.warn('[Ollama] Failed to parse chunk:', line)
           }
         }
       }
+    } catch (error) {
+      console.error('[Ollama] Stream reading error:', error)
+      throw error
     } finally {
       reader.releaseLock()
     }

@@ -1,0 +1,21 @@
+{
+  "id": "web-search-tool",
+  "name": "Web Search",
+  "version": "1.0.0",
+  "description": "Search the web and retrieve relevant information using RAG (Retrieval-Augmented Generation)",
+  "author": "OpenChat Team",
+  "homepage": "https://github.com/yourusername/openchat",
+  "repository": "https://github.com/yourusername/openchat",
+  "license": "MIT",
+  "type": "tool",
+  "appVersion": "0.1.0",
+  "dependencies": [],
+  "core": true,
+  "tools": [
+    {
+      "name": "web_search",
+      "call": "{web_search}",
+      "description": "Search the web for current information"
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "id": "memory-tool",
+  "name": "Memory System",
+  "version": "1.0.0",
+  "description": "Allows AI to create and retrieve memories across conversations",
+  "author": "OpenChat Team",
+  "type": "tool",
+  "appVersion": "1.0.0",
+  "core": true,
+  "tools": [
+    {
+      "name": "create_memory",
+      "call": "{create_memory}",
+      "description": "Store information for future conversations"
+    },
+    {
+      "name": "search_memories",
+      "call": "{search_memories}",
+      "description": "Search through stored memories"
+    },
+    {
+      "name": "list_memories",
+      "call": "{list_memories}",
+      "description": "List all stored memories"
+    }
+  ]
+}

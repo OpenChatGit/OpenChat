@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { ChevronDown } from 'lucide-react'
 import type { ProviderConfig, ModelInfo } from '../types'
 import { ProviderFactory } from '../providers'
-import { cn } from '../lib/utils'
+import { cn, getModelDisplayName, truncateModelName } from '../lib/utils'
 
 interface ModelSelectorProps {
   providers: ProviderConfig[]
@@ -31,6 +31,14 @@ export function ModelSelector({
   const [connectionStatus, setConnectionStatus] = useState<Record<string, boolean | undefined>>({})
   const dropdownRef = useRef<HTMLDivElement>(null)
   const statusCacheRef = useRef<Record<string, { status: boolean; timestamp: number }>>({})
+
+  const selectedModelAvailable = selectedModel
+    ? models.some((model) => model.name === selectedModel)
+    : false
+  const selectedModelDisplay = getModelDisplayName(
+    selectedModel || null,
+    selectedModelAvailable
+  )
 
   // Test provider connections when dropdown opens
   useEffect(() => {
@@ -168,9 +176,13 @@ export function ModelSelector({
         type="button"
         onClick={() => setIsOpen(!isOpen)}
         className="h-8 px-3 rounded-full flex items-center gap-2 transition-all hover:bg-white/10"
+        title={selectedModelDisplay}
       >
-        <span className="text-xs text-gray-300">
-          {selectedModel && selectedModel.trim() !== '' && selectedModel !== 'llama.cpp-model' ? selectedModel : 'Select Model'}
+        <span className={cn(
+          "text-xs",
+          selectedModelAvailable ? "text-gray-300" : "text-gray-500"
+        )}>
+          {truncateModelName(selectedModelDisplay, 25)}
         </span>
         <ChevronDown className={cn(
           "w-3 h-3 text-gray-400 transition-transform",
@@ -245,8 +257,9 @@ export function ModelSelector({
                         ? "bg-white/20 text-white"
                         : "text-gray-300 hover:bg-white/10"
                     )}
+                    title={model.name}
                   >
-                    <div className="font-medium">{model.name}</div>
+                    <div className="font-medium">{truncateModelName(model.name, 32)}</div>
                     {model.size && (
                       <div className="text-xs text-gray-500 mt-0.5">{model.size}</div>
                     )}

@@ -164,8 +164,8 @@ export function useChatWithTools(pluginManager: PluginManager) {
     try {
       const provider = ProviderFactory.createProvider(providerConfig)
       
-      // Get available tools if web search is enabled
-      const availableTools = webSearchEnabled ? toolExecutor.current.getAvailableTools() : []
+      // Get all available tools from plugin manager
+      const availableTools = pluginManager.getAllTools()
       
       // Build messages with system prompt
       const previousMessages = session.messages.filter(m => m.id !== userMessage.id || hasUserMessage)
@@ -254,7 +254,7 @@ export function useChatWithTools(pluginManager: PluginManager) {
       // Check if response contains tool calls
       const toolCalls = parseToolCalls(streamingContentRef.current)
       
-      if (toolCalls && toolCalls.length > 0 && webSearchEnabled) {
+      if (toolCalls && toolCalls.length > 0) {
         console.log('Tool calls detected:', toolCalls)
         
         // Execute tool calls

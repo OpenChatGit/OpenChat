@@ -24,3 +24,42 @@ export function formatTimestamp(timestamp: number): string {
   
   return date.toLocaleDateString()
 }
+
+/**
+ * Truncates a model name to a maximum length
+ * @param name - The model name to truncate
+ * @param maxLength - Maximum length (default: 30)
+ * @returns Truncated name with ellipsis if needed
+ */
+export function truncateModelName(name: string, maxLength: number = 30): string {
+  if (!name) return 'Select Model'
+  if (name.length <= maxLength) return name
+  
+  // Try to truncate at a sensible point (after a colon or slash)
+  const separators = [':', '/', '-']
+  for (const sep of separators) {
+    const parts = name.split(sep)
+    if (parts.length > 1) {
+      // Keep the last part if it's short enough
+      const lastPart = parts[parts.length - 1]
+      if (lastPart.length <= maxLength) {
+        return `...${sep}${lastPart}`
+      }
+    }
+  }
+  
+  // Fallback: simple truncation with ellipsis
+  return name.substring(0, maxLength - 3) + '...'
+}
+
+/**
+ * Gets a display name for a model
+ * @param name - The model name
+ * @param isAvailable - Whether the model is available
+ * @returns Display name or placeholder
+ */
+export function getModelDisplayName(name: string | null | undefined, isAvailable: boolean = true): string {
+  if (!name) return 'Select Model'
+  if (!isAvailable) return `${truncateModelName(name)} (unavailable)`
+  return truncateModelName(name)
+}

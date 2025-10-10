@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
-import { Settings, MoreVertical } from 'lucide-react'
-import { Button } from './ui/Button'
+import { MoreVertical } from 'lucide-react'
+import { AccountMenu } from './AccountMenu'
 import type { ChatSession } from '../types'
 import { formatTimestamp } from '../lib/utils'
 import { cn } from '../lib/utils'
@@ -221,16 +221,9 @@ export function Sidebar({
         )}
       </div>
 
-      {/* Footer */}
+      {/* Footer - Account Menu */}
       <div className="p-3">
-        <Button
-          onClick={onOpenSettings}
-          variant="ghost"
-          className="w-full justify-start gap-2"
-        >
-          <Settings className="w-4 h-4" />
-          Settings
-        </Button>
+        <AccountMenu onOpenSettings={onOpenSettings} />
       </div>
     </div>
   )

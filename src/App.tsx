@@ -5,13 +5,19 @@ import { Settings } from './components/Settings'
 import { useChat } from './hooks/useChat'
 import { useProviders } from './hooks/useProviders'
 import { usePlugins } from './hooks/usePlugins'
-import type { RendererPlugin } from './plugins/types'
+import type { RendererPlugin, ReasoningDetectorPlugin, UIExtensionPlugin } from './plugins/types'
 
 function App() {
   const [showSettings, setShowSettings] = useState(false)
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
   
-  const { pluginManager } = usePlugins()
+  const { pluginManager, plugins, enablePlugin, disablePlugin } = usePlugins()
+  
+  // Get reasoning detector plugin
+  const reasoningDetector = pluginManager.getByType<ReasoningDetectorPlugin>('reasoning-detector')[0]
+  
+  // Get all UI extension plugins (automatically filtered by enabled status)
+  const uiExtensions = pluginManager.getByType<UIExtensionPlugin>('ui-extension')
   
   const {
     sessions,
@@ -24,7 +30,7 @@ function App() {
     sendMessage,
     deleteSession,
     updateSessionTitle,
-  } = useChat()
+  } = useChat(pluginManager)
   
   // Log web search state changes
   useEffect(() => {
@@ -44,12 +50,14 @@ function App() {
     updateProvider,
   } = useProviders()
 
-  // Load models when provider is selected
+  // Load models when provider is selected (only on provider change)
   useEffect(() => {
     if (selectedProvider) {
+      console.log('🔄 Loading models for provider:', selectedProvider.name, selectedProvider.type)
       loadModels(selectedProvider)
     }
-  }, [selectedProvider, loadModels])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedProvider?.type, selectedProvider?.baseUrl])
 
   const handleNewChat = () => {
     if (!selectedProvider || !selectedModel) {
@@ -132,6 +140,8 @@ function App() {
           onSendMessage={handleSendMessage}
           onSendMessageWithNewChat={handleSendMessageWithNewChat}
           rendererPlugins={pluginManager.getByType<RendererPlugin>('renderer')}
+          reasoningDetector={reasoningDetector}
+          uiExtensions={uiExtensions}
           providers={providers}
           selectedProvider={selectedProvider}
           selectedModel={selectedModel}
@@ -152,12 +162,15 @@ function App() {
           models={models}
           selectedModel={selectedModel}
           isLoadingModels={isLoadingModels}
+          plugins={plugins}
           onClose={() => setShowSettings(false)}
           onSelectProvider={setSelectedProvider}
           onSelectModel={setSelectedModel}
           onUpdateProvider={updateProvider}
           onTestProvider={testProvider}
           onLoadModels={loadModels}
+          onEnablePlugin={enablePlugin}
+          onDisablePlugin={disablePlugin}
         />
       )}
     </div>

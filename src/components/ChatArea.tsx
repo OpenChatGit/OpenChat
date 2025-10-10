@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { ChatMessage } from './ChatMessage'
 import { ChatInput } from './ChatInput'
 import type { ChatSession, ProviderConfig, ModelInfo } from '../types'
-import type { RendererPlugin } from '../plugins/types'
+import type { RendererPlugin, ReasoningDetectorPlugin, UIExtensionPlugin } from '../plugins/types'
 
 interface ChatAreaProps {
   session: ChatSession | null
@@ -10,6 +10,8 @@ interface ChatAreaProps {
   onSendMessage: (content: string) => void
   onSendMessageWithNewChat: (content: string) => void
   rendererPlugins?: RendererPlugin[]
+  reasoningDetector?: ReasoningDetectorPlugin
+  uiExtensions?: UIExtensionPlugin[]
   providers: ProviderConfig[]
   selectedProvider: ProviderConfig | null
   selectedModel: string
@@ -27,6 +29,8 @@ export function ChatArea({
   onSendMessage, 
   onSendMessageWithNewChat,
   rendererPlugins = [],
+  reasoningDetector,
+  uiExtensions = [],
   providers,
   selectedProvider,
   selectedModel,
@@ -89,6 +93,8 @@ export function ChatArea({
                 key={message.id} 
                 message={message} 
                 rendererPlugins={rendererPlugins}
+                reasoningDetector={reasoningDetector}
+                uiExtensions={uiExtensions}
               />
             ))}
             <div ref={messagesEndRef} />

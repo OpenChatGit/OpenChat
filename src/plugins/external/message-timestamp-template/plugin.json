@@ -1,0 +1,14 @@
+{
+  "id": "message-timestamp-template",
+  "name": "Message Timestamp (Template)",
+  "version": "1.0.0",
+  "description": "Template plugin: Shows how to process messages. Timestamps are now built-in! Use this as a starting point for your own plugins.",
+  "author": "OpenChat Team",
+  "homepage": "https://github.com/yourusername/openchat",
+  "repository": "https://github.com/yourusername/openchat",
+  "license": "MIT",
+  "type": "ui-extension",
+  "appVersion": "1.0.0",
+  "dependencies": [],
+  "core": false
+}
