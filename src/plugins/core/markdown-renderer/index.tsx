@@ -3,6 +3,7 @@
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
+import remarkBreaks from 'remark-breaks'
 import rehypeKatex from 'rehype-katex'
 import type { RendererPlugin, PluginMetadata } from '../../types'
 import manifestData from './plugin.json'
@@ -34,9 +35,27 @@ export class MarkdownRendererPlugin implements RendererPlugin {
   }
 
   render(content: string): React.ReactNode {
+    // Intelligent text formatting
+    let normalizedContent = content.trim()
+    
+    // Detect if content has natural paragraphs (double line breaks)
+    const hasNaturalParagraphs = /\n\n/.test(content)
+    
+    if (!hasNaturalParagraphs) {
+      // Auto-format: Add paragraph breaks after sentences
+      normalizedContent = content
+        .trim()
+        // Add breaks after sentences ending with . ! ? followed by capital letter
+        .replace(/([.!?])\s+([A-Z])/g, '$1\n\n$2')
+        // Don't break URLs
+        .replace(/(\n\n)(https?:\/\/)/g, ' $2')
+        // Don't break abbreviations (e.g., "e.g.", "i.e.", "U.S.")
+        .replace(/(e\.g\.|i\.e\.|U\.S\.|Dr\.|Mr\.|Mrs\.)\n\n/gi, '$1 ')
+    }
+    
     return (
       <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkMath]}
+        remarkPlugins={[remarkGfm, remarkMath, remarkBreaks]}
         rehypePlugins={[rehypeKatex]}
         components={{
           // Custom component styling
@@ -139,9 +158,18 @@ export class MarkdownRendererPlugin implements RendererPlugin {
               />
             )
           },
+          p({ children }) {
+            return <p className="mb-4 leading-7 text-[15px]">{children}</p>
+          },
+          strong({ children }) {
+            return <strong className="font-semibold text-white">{children}</strong>
+          },
+          em({ children }) {
+            return <em className="italic text-gray-300">{children}</em>
+          },
         }}
       >
-        {content}
+        {normalizedContent}
       </ReactMarkdown>
     )
   }

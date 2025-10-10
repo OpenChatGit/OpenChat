@@ -120,8 +120,11 @@ export interface ReasoningPart {
 export interface ReasoningDetectorPlugin extends BasePlugin {
   metadata: PluginMetadata & { type: 'reasoning-detector' }
   
-  // Parse content and return reasoning parts
-  parseReasoning(content: string): ReasoningPart[]
+  // Parse reasoning from content (with optional model name for better detection)
+  parseReasoning(content: string, modelName?: string): ReasoningPart[]
+  
+  // Check if a model is a reasoning model
+  isReasoningModel?(modelName?: string): boolean
 }
 
 export type Plugin = 
