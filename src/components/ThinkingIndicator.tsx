@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 
 interface ThinkingIndicatorProps {
-  status: 'thinking' | 'searching' | 'processing' | 'generating'
+  status: 'thinking' | 'searching' | 'processing' | 'generating' | 'cancelled'
   message?: string
 }
 
@@ -28,6 +28,8 @@ export function ThinkingIndicator({ status, message }: ThinkingIndicatorProps) {
         return 'Processing'
       case 'generating':
         return 'Generating'
+      case 'cancelled':
+        return 'Generation cancelled'
     }
   }
 

@@ -72,9 +72,9 @@ function App() {
       return
     }
     
-    // Create user message first
+    // Create user message first with stable, unique ID
     const userMessage = {
-      id: Date.now().toString(),
+      id: `${Date.now()}-init`,
       role: 'user' as const,
       content,
       timestamp: Date.now(),
@@ -139,6 +139,7 @@ function App() {
           onSelectProvider={setSelectedProvider}
           onSelectModel={setSelectedModel}
           onLoadModels={loadModels}
+          isLoadingModels={isLoadingModels}
           webSearchEnabled={webSearchEnabled}
           onToggleWebSearch={() => setWebSearchEnabled(!webSearchEnabled)}
         />

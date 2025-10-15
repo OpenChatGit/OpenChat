@@ -1,7 +1,7 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import type { ChatSession, Message, ProviderConfig } from '../types'
 import { ProviderFactory } from '../providers'
-import { generateId } from '../lib/utils'
+import { generateId, loadLocal, saveLocal, retry } from '../lib/utils'
 import { performWebSearch } from '../lib/webSearchHelper'
 
 export function useChat() {
@@ -10,6 +10,52 @@ export function useChat() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [webSearchEnabled, setWebSearchEnabled] = useState(false)
   const streamingContentRef = useRef<string>('')
+  const mountedRef = useRef<boolean>(false)
+  const abortControllerRef = useRef<AbortController | null>(null)
+  const queueTimerRef = useRef<number | null>(null)
+  const userCancelledRef = useRef<boolean>(false)
+  const cancelStreamingRef = useRef<boolean>(false)
+
+  // Load persisted state on mount
+  useEffect(() => {
+    mountedRef.current = true
+    try {
+      const persistedSessions = loadLocal<ChatSession[]>('oc.sessions', [])
+      const persistedCurrentId = loadLocal<string | null>('oc.currentSessionId', null)
+      const persistedWebSearch = loadLocal<boolean>('oc.webSearchEnabled', false)
+
+      if (persistedSessions && Array.isArray(persistedSessions) && persistedSessions.length > 0) {
+        setSessions(persistedSessions)
+        if (persistedCurrentId) {
+          const found = persistedSessions.find(s => s.id === persistedCurrentId) || null
+          setCurrentSession(found)
+        }
+      }
+      if (typeof persistedWebSearch === 'boolean') {
+        setWebSearchEnabled(persistedWebSearch)
+      }
+    } catch {
+      // ignore and start fresh
+    }
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
+
+  // Persist sessions
+  useEffect(() => {
+    saveLocal('oc.sessions', sessions)
+  }, [sessions])
+
+  // Persist current session id
+  useEffect(() => {
+    saveLocal<string | null>('oc.currentSessionId', currentSession?.id ?? null)
+  }, [currentSession])
+
+  // Persist web search toggle
+  useEffect(() => {
+    saveLocal('oc.webSearchEnabled', webSearchEnabled)
+  }, [webSearchEnabled])
 
   const createSession = useCallback((provider: ProviderConfig, model: string, initialMessage?: Message) => {
     const newSession: ChatSession = {
@@ -86,12 +132,79 @@ export function useChat() {
     })
   }, [])
 
+  const setMessageStatus = useCallback((sessionId: string, messageId: string, status: Message['status']) => {
+    setSessions(prev =>
+      prev.map(s =>
+        s.id === sessionId
+          ? {
+              ...s,
+              messages: s.messages.map(m =>
+                m.id === messageId ? { ...m, status } : m
+              ),
+              updatedAt: Date.now(),
+            }
+          : s
+      )
+    )
+    setCurrentSession(prev => {
+      if (prev?.id === sessionId) {
+        return {
+          ...prev,
+          messages: prev.messages.map(m => (m.id === messageId ? { ...m, status } : m)),
+          updatedAt: Date.now(),
+        }
+      }
+      return prev
+    })
+  }, [])
+
+  const removeMessageById = useCallback((sessionId: string, messageId: string) => {
+    setSessions(prev =>
+      prev.map(s =>
+        s.id === sessionId
+          ? { ...s, messages: s.messages.filter(m => m.id !== messageId) }
+          : s
+      )
+    )
+    setCurrentSession(prev => {
+      if (prev?.id === sessionId) {
+        return { ...prev, messages: prev.messages.filter(m => m.id !== messageId) }
+      }
+      return prev
+    })
+  }, [])
+
+  // Helper: push a transient status message (e.g., 'searching')
+  const addStatusMessage = useCallback((sessionId: string, status: Message['status']): Message => {
+    const msg: Message = {
+      id: generateId(),
+      role: 'assistant',
+      content: '',
+      timestamp: Date.now(),
+      status,
+    }
+    addMessage(sessionId, msg)
+    return msg
+  }, [addMessage])
+
   const sendMessage = useCallback(async (
     content: string,
     providerConfig: ProviderConfig,
     model: string,
-    targetSession?: ChatSession
+    targetSession?: ChatSession,
+    existingUserMessageId?: string
   ) => {
+    // Cancel any ongoing generation
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+      abortControllerRef.current = null
+    }
+    if (queueTimerRef.current) {
+      clearTimeout(queueTimerRef.current)
+      queueTimerRef.current = null
+    }
+    cancelStreamingRef.current = false
+
     const session = targetSession || currentSession
     if (!session) return
     
@@ -100,12 +213,22 @@ export function useChat() {
       webSearchEnabled,
     })
 
-    // Check if user message already exists (when creating new session with initial message)
-    const hasUserMessage = session.messages.some(m => m.role === 'user' && m.content === content)
-    
+    // Robust de-dup: reuse the existing initial user message if provided
     let userMessage: Message
-    
-    if (!hasUserMessage) {
+    if (existingUserMessageId) {
+      const found = session.messages.find(m => m.id === existingUserMessageId && m.role === 'user')
+      if (found) {
+        userMessage = found
+      } else {
+        userMessage = {
+          id: existingUserMessageId,
+          role: 'user',
+          content,
+          timestamp: Date.now(),
+        }
+        addMessage(session.id, userMessage)
+      }
+    } else {
       userMessage = {
         id: generateId(),
         role: 'user',
@@ -113,80 +236,32 @@ export function useChat() {
         timestamp: Date.now(),
       }
       addMessage(session.id, userMessage)
-    } else {
-      // Use existing message
-      userMessage = session.messages.find(m => m.role === 'user' && m.content === content)!
     }
 
     // Auto-generate title from first message
-    const isFirstMessage = session.messages.length === 0 || (session.messages.length === 1 && hasUserMessage)
+    const isFirstMessage =
+      session.messages.length === 0 ||
+      (existingUserMessageId !== undefined && session.messages.length === 1)
     if (isFirstMessage) {
       const title = content.slice(0, 50) + (content.length > 50 ? '...' : '')
       updateSessionTitle(session.id, title)
     }
 
-    // Show searching indicator if web search might be needed
-    const searchingMessage: Message = {
-      id: generateId(),
-      role: 'assistant',
-      content: '',
-      timestamp: Date.now(),
-      status: 'searching',
-    }
-
-    // Perform web search if enabled
+    // Perform web search if enabled (with guaranteed cleanup)
+    let searchingMessage: Message | null = null
     let webSearchContext: string | null = null
     if (webSearchEnabled) {
       console.log('🌐 Web Search is ENABLED')
-      addMessage(session.id, searchingMessage)
+      searchingMessage = addStatusMessage(session.id, 'searching')
       console.log('⏳ Calling performWebSearch...')
-      webSearchContext = await performWebSearch(content, webSearchEnabled)
-      console.log('✅ performWebSearch returned:', webSearchContext ? 'Context available' : 'No context')
-      
-      // Remove searching indicator
-      if (webSearchContext) {
-        updateMessage(session.id, searchingMessage.id, '')
-        setSessions(prev =>
-          prev.map(s =>
-            s.id === session.id
-              ? {
-                  ...s,
-                  messages: s.messages.filter(m => m.id !== searchingMessage.id),
-                }
-              : s
-          )
-        )
-        setCurrentSession(prev => {
-          if (prev?.id === session.id) {
-            return {
-              ...prev,
-              messages: prev.messages.filter(m => m.id !== searchingMessage.id),
-            }
-          }
-          return prev
-        })
-      } else {
-        // No search needed, remove indicator
-        updateMessage(session.id, searchingMessage.id, '')
-        setSessions(prev =>
-          prev.map(s =>
-            s.id === session.id
-              ? {
-                  ...s,
-                  messages: s.messages.filter(m => m.id !== searchingMessage.id),
-                }
-              : s
-          )
-        )
-        setCurrentSession(prev => {
-          if (prev?.id === session.id) {
-            return {
-              ...prev,
-              messages: prev.messages.filter(m => m.id !== searchingMessage.id),
-            }
-          }
-          return prev
-        })
+      try {
+        webSearchContext = await performWebSearch(content, webSearchEnabled)
+        console.log('✅ performWebSearch returned:', webSearchContext ? 'Context available' : 'No context')
+      } finally {
+        if (searchingMessage) {
+          updateMessage(session.id, searchingMessage.id, '')
+          removeMessageById(session.id, searchingMessage.id)
+        }
       }
     }
 
@@ -201,6 +276,10 @@ export function useChat() {
     addMessage(session.id, assistantMessage)
     setIsGenerating(true)
 
+    // Prepare abort controller for this request
+    const controller = new AbortController()
+    abortControllerRef.current = controller
+
     try {
       const provider = ProviderFactory.createProvider(providerConfig)
       
@@ -214,19 +293,8 @@ export function useChat() {
         ? previousMessages 
         : [...previousMessages, userMessage]
 
-      const todayIso = new Date().toISOString().split('T')[0]
-      const systemReminder = {
-        role: 'system' as const,
-        content: [
-          `Today's date is ${todayIso}.`,
-          'Treat the aggregated web search context as the most up-to-date information available.',
-          'When multiple independent sources agree, prefer their data over any outdated training knowledge.',
-          'If new evidence contradicts prior assumptions, update your answer accordingly and cite the sources.',
-        ].join(' '),
-      }
-
+      // Build base messages without forcing date unless needed
       let messages = [
-        systemReminder,
         ...allMessages.map(m => ({
           role: m.role,
           content: m.content,
@@ -251,7 +319,22 @@ IMPORTANT: Always cite the sources from the web search results in your answer.`,
         console.log('✅ Messages array now has', messages.length, 'messages')
         console.log('📨 First message is system message with web search context')
       } else {
-        console.log('⚠️ No web search context available')
+        // Add date reminder ONLY when the user explicitly asks for date/time
+        const contentLower = content.toLowerCase()
+        const isDateQuery = (
+          /(?:what(?:'s| is)|which|tell me|give me|please|wie|welches|welcher|welchem|wieviel|wie viel|wie spät).*\b(?:date|datum|time|uhrzeit|day|tag)\b/.test(contentLower) ||
+          /today'?s\s+date|aktuelles\s+datum/.test(contentLower)
+        )
+        if (isDateQuery) {
+          const todayIso = new Date().toISOString().split('T')[0]
+          messages = [
+            {
+              role: 'system' as const,
+              content: `Today's date is ${todayIso}. Use this only to answer the user's explicit question about date/time; otherwise do not mention it.`,
+            },
+            ...messages,
+          ]
+        }
       }
       // Reset streaming content
       streamingContentRef.current = ''
@@ -263,6 +346,12 @@ IMPORTANT: Always cite the sources from the web search results in your answer.`,
       // Process queue with adaptive typewriter effect
       const processQueue = () => {
         if (chunkQueue.length === 0) {
+          isProcessingQueue = false
+          return
+        }
+        if (cancelStreamingRef.current) {
+          // Flush and stop immediately
+          chunkQueue.length = 0
           isProcessingQueue = false
           return
         }
@@ -289,23 +378,36 @@ IMPORTANT: Always cite the sources from the web search results in your answer.`,
         }
         
         chunkCount++
-        setTimeout(processQueue, delay)
+        queueTimerRef.current = window.setTimeout(processQueue, delay) as unknown as number
       }
       
-      await provider.sendMessage(
+      await retry(
+        () => provider.sendMessage(
+          {
+            model,
+            messages,
+            stream: true,
+            temperature: 0.7,
+          },
+          (chunk) => {
+            // Add chunk to queue
+            chunkQueue.push(chunk)
+            
+            // Start processing if not already running
+            if (!isProcessingQueue) {
+              processQueue()
+            }
+          },
+          controller.signal
+        ),
         {
-          model,
-          messages,
-          stream: true,
-          temperature: 0.7,
-        },
-        (chunk) => {
-          // Add chunk to queue
-          chunkQueue.push(chunk)
-          
-          // Start processing if not already running
-          if (!isProcessingQueue) {
-            processQueue()
+          retries: 2,
+          initialDelayMs: 500,
+          factor: 2,
+          shouldRetry: (e) => {
+            if ((e as any)?.name === 'AbortError') return false
+            const msg = (e as Error)?.message || ''
+            return /timeout|ECONNREFUSED|Failed to fetch|NetworkError|5\d\d/.test(msg)
           }
         }
       )
@@ -321,16 +423,37 @@ IMPORTANT: Always cite the sources from the web search results in your answer.`,
       // Final update to ensure all content is shown
       updateMessage(session.id, assistantMessage.id, streamingContentRef.current)
     } catch (error) {
-      console.error('Failed to send message:', error)
-      updateMessage(
-        session.id,
-        assistantMessage.id,
-        `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
-      )
+      if ((error as any)?.name === 'AbortError') {
+        // Close any open <think> block and mark as cancelled
+        let finalContent = streamingContentRef.current
+        if (finalContent && finalContent.includes('<think>') && !finalContent.includes('</think>')) {
+          finalContent += '</think>'
+        }
+        if (finalContent) {
+          updateMessage(session.id, assistantMessage.id, finalContent)
+        }
+        setMessageStatus(session.id, assistantMessage.id, 'cancelled')
+      } else {
+        console.error('Failed to send message:', error)
+        updateMessage(
+          session.id,
+          assistantMessage.id,
+          `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
+        )
+      }
     } finally {
+      if (queueTimerRef.current) {
+        clearTimeout(queueTimerRef.current)
+        queueTimerRef.current = null
+      }
+      cancelStreamingRef.current = false
+      abortControllerRef.current = null
+      userCancelledRef.current = false
       setIsGenerating(false)
     }
-  }, [currentSession, addMessage, updateMessage, updateSessionTitle, webSearchEnabled, setSessions, setCurrentSession])
+  }, [currentSession, addMessage, updateMessage, updateSessionTitle, webSearchEnabled, setSessions, setCurrentSession, removeMessageById])
+
+  // Note: stop generation feature temporarily disabled per user request
 
   const deleteSession = useCallback((sessionId: string) => {
     setSessions(prev => prev.filter(s => s.id !== sessionId))

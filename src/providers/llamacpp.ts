@@ -13,7 +13,8 @@ export class LlamaCppProvider extends BaseProvider {
 
   async sendMessage(
     request: ChatCompletionRequest,
-    onChunk?: (content: string) => void
+    onChunk?: (content: string) => void,
+    signal?: AbortSignal
   ): Promise<string> {
     const url = `${this.config.baseUrl}/v1/chat/completions`
     
@@ -28,26 +29,40 @@ export class LlamaCppProvider extends BaseProvider {
 
     if (!onChunk) {
       // Non-streaming request
-      const response = await this.fetchWithTimeout(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
+      const response = await this.fetchWithTimeout(
+        url,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        },
+        30000,
+        signal
+      )
 
       if (!response.ok) {
         throw new Error(`llama.cpp request failed: ${response.statusText}`)
       }
 
       const data: ChatCompletionResponse = await response.json()
-      return data.choices[0]?.message?.content || ''
+      const msg = data.choices[0]?.message
+      if (!msg) return ''
+      const reasoning = (msg as any).reasoning_content?.trim()
+      const text = msg.content || ''
+      return reasoning ? `<think>${reasoning}</think>${text}` : text
     }
 
     // Streaming request (OpenAI-compatible format)
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
+    const response = await this.fetchWithTimeout(
+      url,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      },
+      30000,
+      signal
+    )
 
     if (!response.ok) {
       throw new Error(`llama.cpp request failed: ${response.statusText}`)
@@ -60,6 +75,7 @@ export class LlamaCppProvider extends BaseProvider {
 
     const decoder = new TextDecoder()
     let fullContent = ''
+    let reasoningOpen = false
 
     try {
       while (true) {
@@ -78,10 +94,28 @@ export class LlamaCppProvider extends BaseProvider {
 
             try {
               const json: StreamResponse = JSON.parse(data)
-              const content = json.choices[0]?.delta?.content
-              if (content) {
-                fullContent += content
-                onChunk(content)
+              const delta = json.choices[0]?.delta || {}
+              const r = (delta as any).reasoning_content as string | undefined
+              const c = (delta as any).content as string | undefined
+
+              if (r) {
+                if (!reasoningOpen) {
+                  reasoningOpen = true
+                  fullContent += '<think>'
+                  onChunk && onChunk('<think>')
+                }
+                fullContent += r
+                onChunk && onChunk(r)
+              }
+
+              if (c) {
+                if (reasoningOpen) {
+                  reasoningOpen = false
+                  fullContent += '</think>'
+                  onChunk && onChunk('</think>')
+                }
+                fullContent += c
+                onChunk && onChunk(c)
               }
             } catch (e) {
               console.warn('Failed to parse chunk:', data)
@@ -93,6 +127,11 @@ export class LlamaCppProvider extends BaseProvider {
       reader.releaseLock()
     }
 
+    if (reasoningOpen) {
+      reasoningOpen = false
+      fullContent += '</think>'
+      onChunk && onChunk('</think>')
+    }
     return fullContent
   }
 

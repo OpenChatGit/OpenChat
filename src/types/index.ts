@@ -9,7 +9,7 @@ export interface Message {
   timestamp: number;
   isReasoning?: boolean; // Flag to indicate if this is a reasoning model response
   isHidden?: boolean; // Hide from UI (tool results, etc.)
-  status?: 'thinking' | 'searching' | 'processing' | 'generating'; // Status indicator
+  status?: 'thinking' | 'searching' | 'processing' | 'generating' | 'cancelled'; // Status indicator
 }
 
 export interface ChatSession {
@@ -46,7 +46,7 @@ export interface ProviderConfig {
 export interface ChatCompletionRequest {
   model: string;
   messages: Array<{
-    role: string;
+    role: 'system' | 'user' | 'assistant';
     content: string;
   }>;
   stream?: boolean;
@@ -67,6 +67,7 @@ export interface ChatCompletionResponse {
     message: {
       role: string;
       content: string;
+      reasoning_content?: string;
     };
     finish_reason?: string;
   }>;
@@ -82,6 +83,7 @@ export interface StreamResponse {
     delta: {
       role?: string;
       content?: string;
+      reasoning_content?: string;
     };
     finish_reason?: string | null;
   }>;

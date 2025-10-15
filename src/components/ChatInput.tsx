@@ -9,7 +9,6 @@ interface ChatInputProps {
   onSend: (message: string) => void
   disabled?: boolean
   isGenerating?: boolean
-  onStop?: () => void
   centered?: boolean
   providers?: ProviderConfig[]
   selectedProvider?: ProviderConfig | null
@@ -18,6 +17,7 @@ interface ChatInputProps {
   onSelectProvider?: (provider: ProviderConfig) => void
   onSelectModel?: (model: string) => void
   onLoadModels?: (provider: ProviderConfig) => void
+  isLoadingModels?: boolean
   webSearchEnabled?: boolean
   onToggleWebSearch?: () => void
 }
@@ -34,6 +34,7 @@ export function ChatInput({
   onSelectProvider = () => {},
   onSelectModel = () => {},
   onLoadModels = () => {},
+  isLoadingModels = false,
   webSearchEnabled = false,
   onToggleWebSearch = () => {}
 }: ChatInputProps) {
@@ -124,11 +125,12 @@ export function ChatInput({
                   onSelectProvider={onSelectProvider}
                   onSelectModel={onSelectModel}
                   onLoadModels={onLoadModels}
+                  isLoadingModels={isLoadingModels}
                   openUpwards={!centered}
                 />
                 )}
                 
-                {/* Send Button */}
+                {/* Send/Stop Button */}
                 <button
                   type="submit"
                   disabled={!input.trim() || disabled || isGenerating}
@@ -137,6 +139,8 @@ export function ChatInput({
                     backgroundColor: input.trim() && !disabled && !isGenerating ? '#FFFFFF' : '#1A1A1C',
                     cursor: input.trim() && !disabled && !isGenerating ? 'pointer' : 'not-allowed'
                   }}
+                  title="Send message"
+                  aria-label="Send message"
                 >
                   <FontAwesomeIcon 
                     icon={faArrowUp} 

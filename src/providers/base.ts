@@ -12,7 +12,8 @@ export abstract class BaseProvider {
   
   abstract sendMessage(
     request: ChatCompletionRequest,
-    onChunk?: (content: string) => void
+    onChunk?: (content: string) => void,
+    signal?: AbortSignal
   ): Promise<string>
 
   abstract testConnection(): Promise<boolean>
@@ -28,21 +29,35 @@ export abstract class BaseProvider {
   protected async fetchWithTimeout(
     url: string,
     options: RequestInit,
-    timeout = 30000
+    timeout = 30000,
+    externalSignal?: AbortSignal
   ): Promise<Response> {
     const controller = new AbortController()
-    const id = setTimeout(() => controller.abort(), timeout)
+    const hasTimeout = typeof timeout === 'number' && timeout > 0
+    const id = hasTimeout ? setTimeout(() => controller.abort(), timeout) : undefined
+
+    const cleanup = () => { if (id !== undefined) clearTimeout(id) }
+    const onExternalAbort = () => controller.abort()
+
+    if (externalSignal) {
+      if (externalSignal.aborted) controller.abort()
+      externalSignal.addEventListener('abort', onExternalAbort, { once: true })
+    }
 
     try {
       const response = await fetch(url, {
         ...options,
         signal: controller.signal,
       })
-      clearTimeout(id)
+      cleanup()
       return response
     } catch (error) {
-      clearTimeout(id)
+      cleanup()
       throw error
+    } finally {
+      if (externalSignal) {
+        externalSignal.removeEventListener('abort', onExternalAbort as any)
+      }
     }
   }
 }

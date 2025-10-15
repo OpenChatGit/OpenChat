@@ -13,6 +13,7 @@ interface ModelSelectorProps {
   onSelectModel: (model: string) => void
   onLoadModels: (provider: ProviderConfig) => void
   openUpwards?: boolean
+  isLoadingModels?: boolean
 }
 
 export function ModelSelector({
@@ -24,6 +25,7 @@ export function ModelSelector({
   onSelectModel,
   onLoadModels,
   openUpwards = true,
+  isLoadingModels = false,
 }: ModelSelectorProps) {
   const STATUS_CACHE_TTL = 60_000
 
@@ -119,6 +121,14 @@ export function ModelSelector({
       document.removeEventListener('mousedown', handleClickOutside)
     }
   }, [isOpen])
+
+  // When opening and no models yet, trigger a load for the selected provider
+  useEffect(() => {
+    if (!isOpen) return
+    if (models.length === 0 && selectedProvider) {
+      onLoadModels(selectedProvider)
+    }
+  }, [isOpen, models.length, selectedProvider, onLoadModels])
 
   const handleProviderClick = (provider: ProviderConfig) => {
     onSelectProvider(provider)
@@ -229,10 +239,10 @@ export function ModelSelector({
 
           {/* Models List */}
           <div className="max-h-80 overflow-y-auto">
-            {models.length === 0 ? (
-              <div className="p-4 text-center text-gray-500 text-sm">
-                No models available
-              </div>
+            {isLoadingModels ? (
+              <div className="p-4 text-center text-gray-500 text-sm">Loading models…</div>
+            ) : models.length === 0 ? (
+              <div className="p-4 text-center text-gray-500 text-sm">No models available</div>
             ) : (
               <div className="p-2">
                 {models.map((model) => (

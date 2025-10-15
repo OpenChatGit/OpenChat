@@ -24,7 +24,8 @@ export class OllamaProvider extends BaseProvider {
 
   async sendMessage(
     request: ChatCompletionRequest,
-    onChunk?: (content: string) => void
+    onChunk?: (content: string) => void,
+    signal?: AbortSignal
   ): Promise<string> {
     const url = `${this.config.baseUrl}/api/chat`
     
@@ -41,26 +42,39 @@ export class OllamaProvider extends BaseProvider {
 
     if (!onChunk) {
       // Non-streaming request
-      const response = await this.fetchWithTimeout(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
+      const response = await this.fetchWithTimeout(
+        url,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        },
+        30000,
+        signal
+      )
 
       if (!response.ok) {
         throw new Error(`Ollama request failed: ${response.statusText}`)
       }
 
       const data = await response.json()
-      return data.message?.content || ''
+      const msg = data.message || {}
+      const reasoning = (msg.reasoning_content || msg.reasoning || msg.thoughts || msg.thinking || data.reasoning_content || data.reasoning || data.thoughts || data.thinking || '').toString().trim()
+      const text = msg.content || data.response || ''
+      return reasoning ? `<think>${reasoning}</think>${text}` : text
     }
 
     // Streaming request
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
+    const response = await this.fetchWithTimeout(
+      url,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      },
+      30000,
+      signal
+    )
 
     if (!response.ok) {
       throw new Error(`Ollama request failed: ${response.statusText}`)
@@ -73,6 +87,7 @@ export class OllamaProvider extends BaseProvider {
 
     const decoder = new TextDecoder()
     let fullContent = ''
+    let reasoningOpen = false
 
     try {
       while (true) {
@@ -85,12 +100,36 @@ export class OllamaProvider extends BaseProvider {
         for (const line of lines) {
           try {
             const json = JSON.parse(line)
-            if (json.message?.content) {
-              const content = json.message.content
-              fullContent += content
-              onChunk(content)
+            const msg = json.message || {}
+            const r = (msg.reasoning_content || msg.reasoning || msg.thoughts || msg.thinking || json.reasoning_content || json.reasoning || json.thoughts || json.thinking) as string | undefined
+            const c = (msg.content || json.response) as string | undefined
+
+            if (r) {
+              if (!reasoningOpen) {
+                reasoningOpen = true
+                fullContent += '<think>'
+                onChunk && onChunk('<think>')
+              }
+              fullContent += r
+              onChunk && onChunk(r)
             }
+
+            if (c) {
+              if (reasoningOpen) {
+                reasoningOpen = false
+                fullContent += '</think>'
+                onChunk && onChunk('</think>')
+              }
+              fullContent += c
+              onChunk && onChunk(c)
+            }
+
             if (json.done) {
+              if (reasoningOpen) {
+                reasoningOpen = false
+                fullContent += '</think>'
+                onChunk && onChunk('</think>')
+              }
               return fullContent
             }
           } catch (e) {

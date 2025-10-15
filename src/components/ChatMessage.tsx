@@ -19,25 +19,35 @@ export function ChatMessage({ message, rendererPlugins = [] }: ChatMessageProps)
   
   // Parse reasoning blocks from AI messages
   const parseReasoning = (content: string) => {
+    // Normalize alternative reasoning markers to <think> tags for a single parser path
+    let text = content
+      .replace(/<thinking>/gi, '<think>')
+      .replace(/<\/thinking>/gi, '</think>')
+      .replace(/<reasoning>/gi, '<think>')
+      .replace(/<\/reasoning>/gi, '</think>')
+      // Convert fenced code blocks ```reasoning to <think> blocks
+      .replace(/```reasoning\s*/gi, '<think>')
+      .replace(/```\s*/g, '</think>')
+
     // Check if content has <think> tags
-    if (!content.includes('<think>')) {
-      return [{ type: 'text', content }]
+    if (!text.includes('<think>')) {
+      return [{ type: 'text', content: text }]
     }
     
     const parts: Array<{ type: string; content: string }> = []
     
     // Handle incomplete reasoning (during streaming)
-    if (content.includes('<think>') && !content.includes('</think>')) {
-      const thinkIndex = content.indexOf('<think>')
+    if (text.includes('<think>') && !text.includes('</think>')) {
+      const thinkIndex = text.indexOf('<think>')
       // Add text before <think> if any
       if (thinkIndex > 0) {
-        const beforeText = content.slice(0, thinkIndex).trim()
+        const beforeText = text.slice(0, thinkIndex).trim()
         if (beforeText) {
           parts.push({ type: 'text', content: beforeText })
         }
       }
       // Add incomplete reasoning content (everything after <think>)
-      const reasoningContent = content.slice(thinkIndex + 7).trim() // +7 for '<think>'
+      const reasoningContent = text.slice(thinkIndex + 7).trim() // +7 for '<think>'
       if (reasoningContent) {
         parts.push({ type: 'reasoning', content: reasoningContent })
       }
@@ -49,10 +59,10 @@ export function ChatMessage({ message, rendererPlugins = [] }: ChatMessageProps)
     let match
     let lastIndex = 0
     
-    while ((match = thinkRegex.exec(content)) !== null) {
+    while ((match = thinkRegex.exec(text)) !== null) {
       // Add text before <think>
       if (match.index > lastIndex) {
-        const beforeText = content.slice(lastIndex, match.index).trim()
+        const beforeText = text.slice(lastIndex, match.index).trim()
         if (beforeText) {
           parts.push({ type: 'text', content: beforeText })
         }
@@ -66,8 +76,8 @@ export function ChatMessage({ message, rendererPlugins = [] }: ChatMessageProps)
     }
     
     // Add remaining text after last </think>
-    if (lastIndex < content.length) {
-      const remainingText = content.slice(lastIndex).trim()
+    if (lastIndex < text.length) {
+      const remainingText = text.slice(lastIndex).trim()
       if (remainingText) {
         parts.push({ type: 'text', content: remainingText })
       }
@@ -100,7 +110,14 @@ export function ChatMessage({ message, rendererPlugins = [] }: ChatMessageProps)
       <div className="max-w-3xl mx-auto">
         <div className="prose prose-invert max-w-none mb-2">
           {(() => {
-            const hasReasoningTag = message.content && message.content.includes('<think>')
+            if (message.status === 'cancelled') {
+              return (
+                <div className="flex items-center gap-2 text-sm text-gray-400">
+                  <span>Generation cancelled</span>
+                </div>
+              )
+            }
+            const hasReasoningTag = message.content && /<(think|thinking|reasoning)>|```reasoning/i.test(message.content)
             
             // If no content yet, show "Reasoning..." indicator
             if (!message.content) {
@@ -139,7 +156,7 @@ export function ChatMessage({ message, rendererPlugins = [] }: ChatMessageProps)
                 {parts.map((part, index) => {
                   if (part.type === 'reasoning') {
                     // Check if reasoning is complete (has closing tag)
-                    const isComplete = message.content.includes('</think>')
+                    const isComplete = /<\/(think|thinking|reasoning)>|```/i.test(message.content)
                     return <ReasoningBlock key={index} content={part.content} isComplete={isComplete} />
                   }
                   
@@ -178,7 +195,12 @@ export function ChatMessage({ message, rendererPlugins = [] }: ChatMessageProps)
             <button
               onClick={() => {
                 // Remove <think>...</think> blocks from content before copying
-                const contentWithoutReasoning = message.content.replace(/<think>[\s\S]*?<\/think>/g, '').trim()
+                const contentWithoutReasoning = message.content
+                  .replace(/<think>[\s\S]*?<\/think>/gi, '')
+                  .replace(/<thinking>[\s\S]*?<\/thinking>/gi, '')
+                  .replace(/<reasoning>[\s\S]*?<\/reasoning>/gi, '')
+                  .replace(/```reasoning[\s\S]*?```/gi, '')
+                  .trim()
                 navigator.clipboard.writeText(contentWithoutReasoning)
                 
                 // Show checkmark animation

@@ -17,6 +17,7 @@ interface ChatAreaProps {
   onSelectProvider: (provider: ProviderConfig) => void
   onSelectModel: (model: string) => void
   onLoadModels: (provider: ProviderConfig) => void
+  isLoadingModels?: boolean
   webSearchEnabled?: boolean
   onToggleWebSearch?: () => void
 }
@@ -34,6 +35,7 @@ export function ChatArea({
   onSelectProvider,
   onSelectModel,
   onLoadModels,
+  isLoadingModels = false,
   webSearchEnabled = false,
   onToggleWebSearch = () => {}
 }: ChatAreaProps) {
@@ -97,7 +99,7 @@ export function ChatArea({
       </div>
 
       {/* Input */}
-      <ChatInput
+        <ChatInput
         onSend={onSendMessage}
         disabled={isGenerating}
         isGenerating={isGenerating}
@@ -108,6 +110,7 @@ export function ChatArea({
         onSelectProvider={onSelectProvider}
         onSelectModel={onSelectModel}
         onLoadModels={onLoadModels}
+            isLoadingModels={isLoadingModels}
         webSearchEnabled={webSearchEnabled}
         onToggleWebSearch={onToggleWebSearch}
       />
