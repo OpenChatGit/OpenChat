@@ -83,8 +83,8 @@ function App() {
     // Create session WITH the user message already in it
     const session = createSession(selectedProvider, selectedModel, userMessage)
     
-    // Now send to AI (this will add the assistant message)
-    await sendMessage(content, selectedProvider, selectedModel, session)
+    // Now send to AI (reuse existing user message to avoid duplicates)
+    await sendMessage(content, selectedProvider, selectedModel, session, userMessage.id)
   }
 
   return (
