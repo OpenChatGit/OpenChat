@@ -10,6 +10,13 @@ export interface Message {
   isReasoning?: boolean; // Flag to indicate if this is a reasoning model response
   isHidden?: boolean; // Hide from UI (tool results, etc.)
   status?: 'thinking' | 'searching' | 'processing' | 'generating' | 'cancelled'; // Status indicator
+  isStreaming?: boolean; // Track if message is actively streaming
+  metadata?: {
+    model?: string;
+    provider?: string;
+    tokensUsed?: number;
+    renderTime?: number; // Track rendering performance
+  };
 }
 
 export interface ChatSession {

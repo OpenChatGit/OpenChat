@@ -4,8 +4,9 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
-import rehypeHighlight from 'rehype-highlight'
-import type { RendererPlugin } from '../types'
+import rehypePrettyCode from 'rehype-pretty-code'
+import type { RendererPlugin } from '../core'
+import { CodeBlock } from '../../components/CodeBlock'
 
 export class MarkdownPlugin implements RendererPlugin {
   metadata = {
@@ -17,6 +18,9 @@ export class MarkdownPlugin implements RendererPlugin {
     type: 'renderer' as const,
     appVersion: '1.0.0',
     enabled: true,
+    loaded: false,
+    folderPath: 'src/plugins/builtin/markdown-renderer',
+    isBuiltin: true,
   }
 
   canRender(content: string): boolean {
@@ -39,61 +43,159 @@ export class MarkdownPlugin implements RendererPlugin {
   }
 
   render(content: string): React.ReactNode {
+    // Configure rehype-pretty-code with Shiki options
+    const rehypePrettyCodeOptions = {
+      theme: 'github-dark',
+      keepBackground: false, // Use our custom background from CodeBlock component
+      onVisitLine(node: any) {
+        // Prevent empty lines from collapsing
+        if (node.children.length === 0) {
+          node.children = [{ type: 'text', value: ' ' }]
+        }
+      },
+      onVisitHighlightedLine(node: any) {
+        // Add class for highlighted lines
+        if (!node.properties.className) {
+          node.properties.className = []
+        }
+        node.properties.className.push('highlighted')
+      }
+    }
+
     return (
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath]}
-        rehypePlugins={[rehypeKatex, rehypeHighlight]}
+        rehypePlugins={[
+          rehypeKatex, 
+          [rehypePrettyCode, rehypePrettyCodeOptions]
+        ]}
         components={{
-          // Custom component styling
+          // Delegate code rendering to CodeBlock component
           code({ node, className, children, ...props }: any) {
             const match = /language-(\w+)/.exec(className || '')
             const inline = !match
-            return !inline ? (
-              <div className="relative group">
-                <pre className="bg-muted rounded-lg p-4 overflow-x-auto my-2">
-                  <code className={className} {...props}>
-                    {children}
-                  </code>
-                </pre>
-                {match && (
-                  <div className="absolute top-2 right-2 text-xs text-muted-foreground bg-background px-2 py-1 rounded">
-                    {match[1]}
-                  </div>
-                )}
-              </div>
-            ) : (
-              <code className="bg-muted px-1.5 py-0.5 rounded text-sm" {...props}>
-                {children}
-              </code>
+            
+            // For inline code, use simple styling
+            if (inline) {
+              return (
+                <code 
+                  className="px-1.5 py-0.5 rounded text-sm font-mono"
+                  style={{
+                    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                    fontSize: '0.9em'
+                  }}
+                  {...props}
+                >
+                  {children}
+                </code>
+              )
+            }
+            
+            // For code blocks, delegate to CodeBlock component
+            const language = match ? match[1] : 'text'
+            const codeContent = String(children).replace(/\n$/, '')
+            
+            return (
+              <CodeBlock 
+                code={codeContent}
+                language={language}
+              />
             )
           },
           pre({ children }) {
+            // Return children directly to avoid double-wrapping
             return <>{children}</>
           },
           h1({ children }) {
-            return <h1 className="text-3xl font-bold mt-6 mb-4">{children}</h1>
+            return (
+              <h1 
+                className="font-semibold mt-6 mb-4 first:mt-0"
+                style={{ fontSize: '2em', lineHeight: '1.3' }}
+              >
+                {children}
+              </h1>
+            )
           },
           h2({ children }) {
-            return <h2 className="text-2xl font-bold mt-5 mb-3">{children}</h2>
+            return (
+              <h2 
+                className="font-semibold mt-5 mb-3 first:mt-0"
+                style={{ fontSize: '1.5em', lineHeight: '1.4' }}
+              >
+                {children}
+              </h2>
+            )
           },
           h3({ children }) {
-            return <h3 className="text-xl font-bold mt-4 mb-2">{children}</h3>
+            return (
+              <h3 
+                className="font-semibold mt-4 mb-2 first:mt-0"
+                style={{ fontSize: '1.25em', lineHeight: '1.5' }}
+              >
+                {children}
+              </h3>
+            )
           },
           h4({ children }) {
-            return <h4 className="text-lg font-bold mt-3 mb-2">{children}</h4>
+            return (
+              <h4 
+                className="font-semibold mt-3 mb-2 first:mt-0"
+                style={{ fontSize: '1.1em', lineHeight: '1.5' }}
+              >
+                {children}
+              </h4>
+            )
           },
           ul({ children }) {
-            return <ul className="list-disc list-inside my-2 space-y-1">{children}</ul>
+            return (
+              <ul 
+                className="my-4 first:mt-0 last:mb-0"
+                style={{ 
+                  paddingLeft: '2em',
+                  listStyleType: 'disc',
+                  lineHeight: '1.7'
+                }}
+              >
+                {children}
+              </ul>
+            )
           },
           ol({ children }) {
-            return <ol className="list-decimal list-inside my-2 space-y-1">{children}</ol>
+            return (
+              <ol 
+                className="my-4 first:mt-0 last:mb-0"
+                style={{ 
+                  paddingLeft: '2em',
+                  listStyleType: 'decimal',
+                  lineHeight: '1.7'
+                }}
+              >
+                {children}
+              </ol>
+            )
           },
           li({ children }) {
-            return <li className="ml-4">{children}</li>
+            return (
+              <li 
+                className="my-2"
+                style={{ lineHeight: '1.7' }}
+              >
+                {children}
+              </li>
+            )
           },
           blockquote({ children }) {
             return (
-              <blockquote className="border-l-4 border-primary pl-4 py-2 my-2 italic text-muted-foreground">
+              <blockquote 
+                className="my-4 py-2 px-4 first:mt-0 last:mb-0"
+                style={{
+                  borderLeft: '4px solid rgba(255, 255, 255, 0.3)',
+                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                  color: 'rgba(255, 255, 255, 0.7)',
+                  fontStyle: 'italic',
+                  lineHeight: '1.7'
+                }}
+              >
                 {children}
               </blockquote>
             )
@@ -104,16 +206,42 @@ export class MarkdownPlugin implements RendererPlugin {
                 href={href}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-primary hover:underline"
+                className="transition-all duration-200"
+                style={{
+                  color: '#58a6ff',
+                  textDecoration: 'none'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.textDecoration = 'underline'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.textDecoration = 'none'
+                }}
               >
                 {children}
               </a>
             )
           },
+          p({ children }) {
+            return (
+              <p 
+                className="my-4 first:mt-0 last:mb-0"
+                style={{ lineHeight: '1.7' }}
+              >
+                {children}
+              </p>
+            )
+          },
           table({ children }) {
             return (
-              <div className="overflow-x-auto my-4">
-                <table className="min-w-full border-collapse border border-border">
+              <div className="overflow-x-auto my-6 first:mt-0 last:mb-0">
+                <table 
+                  style={{
+                    borderCollapse: 'collapse',
+                    width: '100%',
+                    border: '1px solid rgba(255, 255, 255, 0.2)'
+                  }}
+                >
                   {children}
                 </table>
               </div>
@@ -121,13 +249,29 @@ export class MarkdownPlugin implements RendererPlugin {
           },
           th({ children }) {
             return (
-              <th className="border border-border bg-muted px-4 py-2 text-left font-semibold">
+              <th 
+                className="text-left font-semibold"
+                style={{
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                  padding: '0.75em 1em'
+                }}
+              >
                 {children}
               </th>
             )
           },
           td({ children }) {
-            return <td className="border border-border px-4 py-2">{children}</td>
+            return (
+              <td 
+                style={{
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  padding: '0.75em 1em'
+                }}
+              >
+                {children}
+              </td>
+            )
           },
           hr() {
             return <hr className="my-4 border-border" />

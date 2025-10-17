@@ -1,6 +1,6 @@
 // Web Search Tool Plugin
 
-import type { ToolPlugin } from '../../plugins/types'
+import type { ToolPlugin } from '../../core'
 import { WebSearchTool } from './index'
 import type { SearchQuery } from './types'
 
@@ -14,6 +14,9 @@ export class WebSearchToolPlugin implements ToolPlugin {
     type: 'tool' as const,
     appVersion: '1.0.0',
     enabled: true,
+    loaded: false,
+    folderPath: 'src/plugins/builtin/web-search',
+    isBuiltin: true,
   }
 
   private searchTool: WebSearchTool

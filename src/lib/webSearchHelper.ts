@@ -1,6 +1,6 @@
 // Web Search Helper - Automatische Suche vor KI-Antwort
 
-import { WebSearchTool } from '../global_tools/web-search'
+import { WebSearchTool } from '../plugins/builtin/web-search'
 
 /**
  * Prüft ob eine Frage Web Search benötigt

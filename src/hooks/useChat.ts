@@ -102,9 +102,9 @@ export function useChat() {
   }, [])
 
   const updateMessage = useCallback((sessionId: string, messageId: string, content: string) => {
-    // Update sessions
-    setSessions(prev =>
-      prev.map(s =>
+    // Batch both updates together to prevent excessive re-renders
+    setSessions(prev => {
+      const updated = prev.map(s =>
         s.id === sessionId
           ? {
               ...s,
@@ -115,7 +115,8 @@ export function useChat() {
             }
           : s
       )
-    )
+      return updated
+    })
     
     // Update currentSession separately to trigger re-render
     setCurrentSession(prev => {
@@ -342,11 +343,17 @@ IMPORTANT: Always cite the sources from the web search results in your answer.`,
       let isProcessingQueue = false
       let chunkCount = 0
       let streamingComplete = false
+      let lastUpdateTime = 0
+      const MIN_UPDATE_INTERVAL = 50 // Minimum 50ms between updates to prevent excessive re-renders
       
       // Process queue with adaptive typewriter effect
       const processQueue = () => {
         if (chunkQueue.length === 0) {
           isProcessingQueue = false
+          // Final update if there's pending content
+          if (streamingContentRef.current) {
+            updateMessage(session.id, assistantMessage.id, streamingContentRef.current)
+          }
           return
         }
         if (cancelStreamingRef.current) {
@@ -359,7 +366,15 @@ IMPORTANT: Always cite the sources from the web search results in your answer.`,
         isProcessingQueue = true
         const chunk = chunkQueue.shift()!
         streamingContentRef.current += chunk
-        updateMessage(session.id, assistantMessage.id, streamingContentRef.current)
+        
+        // Throttle updates to prevent excessive re-renders
+        const now = Date.now()
+        const shouldUpdate = (now - lastUpdateTime) >= MIN_UPDATE_INTERVAL || chunkQueue.length === 0
+        
+        if (shouldUpdate) {
+          updateMessage(session.id, assistantMessage.id, streamingContentRef.current)
+          lastUpdateTime = now
+        }
         
         // Adaptive delay based on queue size
         let delay = 0

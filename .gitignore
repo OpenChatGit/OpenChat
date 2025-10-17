@@ -36,3 +36,7 @@ Thumbs.db
 
 # Test coverage
 coverage
+
+# External plugins (user-installed)
+src/plugins/external/*
+!src/plugins/external/.gitkeep

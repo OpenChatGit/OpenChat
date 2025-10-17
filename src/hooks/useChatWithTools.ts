@@ -7,7 +7,7 @@ import { ProviderFactory } from '../providers'
 import { generateId } from '../lib/utils'
 import { ToolExecutor } from '../lib/toolExecutor'
 import { generateSystemPrompt, parseToolCalls, createToolResultMessage } from '../lib/systemPrompts'
-import type { PluginManager } from '../plugins/PluginManager'
+import type { PluginManager } from '../plugins/core'
 
 export function useChatWithTools(pluginManager: PluginManager) {
   const [sessions, setSessions] = useState<ChatSession[]>([])
@@ -170,7 +170,7 @@ export function useChatWithTools(pluginManager: PluginManager) {
       // Build messages with system prompt
       const previousMessages = session.messages.filter(m => m.id !== userMessage.id || hasUserMessage)
       
-      let messages: Array<{ role: string; content: string }> = []
+      let messages: Array<{ role: "user" | "assistant" | "system"; content: string }> = []
       
       // Add system prompt with tools if enabled
       if (availableTools.length > 0) {
@@ -183,7 +183,7 @@ export function useChatWithTools(pluginManager: PluginManager) {
       // Add conversation history
       messages = messages.concat(
         previousMessages.map(m => ({
-          role: m.role,
+          role: m.role as "user" | "assistant" | "system",
           content: m.content,
         }))
       )
@@ -265,7 +265,7 @@ export function useChatWithTools(pluginManager: PluginManager) {
         
         // Build new messages array with tool results
         const messagesWithResults = updatedSession.messages.map(m => ({
-          role: m.role,
+          role: m.role as "user" | "assistant" | "system",
           content: m.content,
         }))
         

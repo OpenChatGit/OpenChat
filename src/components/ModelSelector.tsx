@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
 import { ChevronDown } from 'lucide-react'
 import type { ProviderConfig, ModelInfo } from '../types'
-import { ProviderFactory } from '../providers'
 import { cn } from '../lib/utils'
+import { ProviderHealthMonitor, type ProviderHealthStatus } from '../services/ProviderHealthMonitor'
 
 interface ModelSelectorProps {
   providers: ProviderConfig[]
@@ -27,83 +27,39 @@ export function ModelSelector({
   openUpwards = true,
   isLoadingModels = false,
 }: ModelSelectorProps) {
-  const STATUS_CACHE_TTL = 60_000
-
   const [isOpen, setIsOpen] = useState(false)
-  const [connectionStatus, setConnectionStatus] = useState<Record<string, boolean | undefined>>({})
+  const [connectionStatus, setConnectionStatus] = useState<Map<string, ProviderHealthStatus>>(new Map())
   const dropdownRef = useRef<HTMLDivElement>(null)
-  const statusCacheRef = useRef<Record<string, { status: boolean; timestamp: number }>>({})
+  const healthMonitor = ProviderHealthMonitor.getInstance()
 
-  // Test provider connections when dropdown opens
+  // Load initial status from monitor on mount
   useEffect(() => {
-    if (!isOpen) {
-      return
+    const initialStatus = healthMonitor.getAllStatuses()
+    setConnectionStatus(initialStatus)
+  }, [healthMonitor])
+
+  // Subscribe to monitor updates
+  useEffect(() => {
+    const unsubscribe = healthMonitor.subscribe((statuses) => {
+      setConnectionStatus(new Map(statuses))
+    })
+
+    return unsubscribe
+  }, [healthMonitor])
+
+  // Trigger checks when dropdown opens if cache is stale
+  useEffect(() => {
+    if (!isOpen) return
+
+    const needsRefresh = providers.some(provider => {
+      const status = healthMonitor.getStatus(provider.type)
+      return !status || !healthMonitor.isCacheValid(status)
+    })
+
+    if (needsRefresh) {
+      healthMonitor.checkProviders(providers, { timeout: 2000 })
     }
-
-    let cancelled = false
-
-    const checkConnections = async () => {
-      const cache = statusCacheRef.current
-      const initialStatuses: Record<string, boolean | undefined> = {}
-      const providersToTest: ProviderConfig[] = []
-      const now = Date.now()
-
-      providers.forEach((provider) => {
-        if (!provider.enabled) {
-          cache[provider.type] = { status: false, timestamp: now }
-          initialStatuses[provider.type] = false
-          return
-        }
-
-        const cached = cache[provider.type]
-        if (cached && now - cached.timestamp < STATUS_CACHE_TTL) {
-          initialStatuses[provider.type] = cached.status
-        } else {
-          initialStatuses[provider.type] = undefined
-          providersToTest.push(provider)
-        }
-      })
-
-      setConnectionStatus((prev) => ({ ...prev, ...initialStatuses }))
-
-      if (providersToTest.length === 0) {
-        return
-      }
-
-      const updates = await Promise.all(
-        providersToTest.map(async (provider) => {
-          try {
-            const providerInstance = ProviderFactory.createProvider(provider)
-            const isConnected = await providerInstance.testConnection()
-            statusCacheRef.current[provider.type] = { status: isConnected, timestamp: Date.now() }
-            return { type: provider.type, status: isConnected }
-          } catch (error) {
-            console.log(`Provider ${provider.type} test failed:`, error)
-            statusCacheRef.current[provider.type] = { status: false, timestamp: Date.now() }
-            return { type: provider.type, status: false }
-          }
-        })
-      )
-
-      if (cancelled) {
-        return
-      }
-
-      setConnectionStatus((prev) => {
-        const next = { ...prev }
-        updates.forEach(({ type, status }) => {
-          next[type] = status
-        })
-        return next
-      })
-    }
-
-    checkConnections()
-
-    return () => {
-      cancelled = true
-    }
-  }, [isOpen, providers])
+  }, [isOpen, providers, healthMonitor])
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -138,6 +94,25 @@ export function ModelSelector({
   const handleModelClick = (model: string) => {
     onSelectModel(model)
     setIsOpen(false)
+  }
+
+  const renderStatusIndicator = (provider: ProviderConfig) => {
+    const status = connectionStatus.get(provider.type)
+    
+    return (
+      <div 
+        className={cn(
+          "w-1.5 h-1.5 rounded-full mt-1 transition-all",
+          status?.checking && "animate-pulse"
+        )}
+        style={{ 
+          backgroundColor: 
+            status?.status === true ? '#10B981' :   // Green
+            status?.status === false ? '#EF4444' :  // Red
+            '#6B7280'                                // Gray (unknown)
+        }}
+      />
+    )
   }
 
   const getProviderIcon = (type: string) => {
@@ -180,7 +155,7 @@ export function ModelSelector({
         className="h-8 px-3 rounded-full flex items-center gap-2 transition-all hover:bg-white/10"
       >
         <span className="text-xs text-gray-300">
-          {selectedModel && selectedModel.trim() !== '' && selectedModel !== 'llama.cpp-model' ? selectedModel : 'Select Model'}
+          {selectedModel && selectedModel.trim() !== '' && selectedModel !== 'llama.cpp-model' && models.some(m => m.name === selectedModel) ? selectedModel : 'Select Model'}
         </span>
         <ChevronDown className={cn(
           "w-3 h-3 text-gray-400 transition-transform",
@@ -222,16 +197,7 @@ export function ModelSelector({
                     {icon}
                   </button>
                   {/* Connection Status Indicator */}
-                  <div 
-                    className="w-1.5 h-1.5 rounded-full mt-1"
-                    style={{ 
-                      backgroundColor: connectionStatus[provider.type] === true 
-                        ? '#10B981' 
-                        : connectionStatus[provider.type] === false 
-                        ? '#EF4444' 
-                        : '#6B7280'
-                    }}
-                  />
+                  {renderStatusIndicator(provider)}
                 </div>
               )
             })}

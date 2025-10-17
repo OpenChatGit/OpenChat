@@ -2,7 +2,7 @@
 
 import { Copy, Check } from 'lucide-react'
 import { useState } from 'react'
-import type { MessageProcessorPlugin } from '../types'
+import type { MessageProcessorPlugin } from '../core'
 
 export class CodeCopyPlugin implements MessageProcessorPlugin {
   metadata = {
@@ -14,6 +14,9 @@ export class CodeCopyPlugin implements MessageProcessorPlugin {
     type: 'message-processor' as const,
     appVersion: '1.0.0',
     enabled: true,
+    loaded: false,
+    folderPath: 'src/plugins/builtin/code-copy',
+    isBuiltin: true,
   }
 
   // This plugin works by adding data attributes that the UI can use

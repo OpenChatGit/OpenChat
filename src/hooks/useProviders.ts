@@ -81,8 +81,24 @@ export function useProviders() {
     const cached = cache[selectedProvider.type]
     if (cached && cached.length > 0) {
       setModels(cached)
+      
+      // Validate that the selected model exists in the cached list
+      if (selectedModel) {
+        const modelExists = cached.some(m => m.name === selectedModel)
+        if (!modelExists) {
+          // Selected model doesn't exist in cache, clear it
+          setSelectedModel('')
+          saveLocal('selectedModel', '')
+        }
+      }
+    } else {
+      // No cached models, clear selected model
+      if (selectedModel) {
+        setSelectedModel('')
+        saveLocal('selectedModel', '')
+      }
     }
-  }, [selectedProvider])
+  }, [selectedProvider, selectedModel])
 
   useEffect(() => {
     if (selectedModel) {
@@ -102,13 +118,38 @@ export function useProviders() {
       cache[providerConfig.type] = modelList
       saveLocal('oc.modelCache', cache)
       
-      // Auto-select first model if none selected
+      // Validate that the currently selected model exists in the list
+      if (selectedModel) {
+        const modelExists = modelList.some(m => m.name === selectedModel)
+        if (!modelExists) {
+          // Selected model doesn't exist anymore, clear it
+          setSelectedModel('')
+          saveLocal('selectedModel', '')
+        }
+      }
+      
+      // Auto-select first model if none selected and models are available
       if (modelList.length > 0 && !selectedModel) {
         setSelectedModel(modelList[0].name)
       }
     } catch (error) {
-      console.error('Failed to load models:', error)
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      
+      // Gracefully handle unsupported providers
+      if (errorMessage.includes('Unsupported provider type')) {
+        console.warn(`Provider ${providerConfig.type} is not yet implemented`)
+      } else if (errorMessage.includes('Failed to fetch') || errorMessage.includes('ERR_CONNECTION_REFUSED')) {
+        console.warn(`Provider ${providerConfig.name} is not reachable at ${providerConfig.baseUrl}`)
+      } else {
+        console.error('Failed to load models:', error)
+      }
+      
       setModels([])
+      // Clear selected model if loading fails
+      if (selectedModel) {
+        setSelectedModel('')
+        saveLocal('selectedModel', '')
+      }
     } finally {
       setIsLoadingModels(false)
     }
@@ -119,7 +160,15 @@ export function useProviders() {
       const provider = ProviderFactory.createProvider(providerConfig)
       return await provider.testConnection()
     } catch (error) {
-      console.error('Provider test failed:', error)
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      
+      // Gracefully handle unsupported providers
+      if (errorMessage.includes('Unsupported provider type')) {
+        console.warn(`Provider ${providerConfig.type} is not yet implemented`)
+      } else {
+        console.warn(`Provider test failed for ${providerConfig.name}:`, errorMessage)
+      }
+      
       return false
     }
   }, [])

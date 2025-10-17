@@ -135,12 +135,12 @@ export class LlamaCppProvider extends BaseProvider {
     return fullContent
   }
 
-  async testConnection(): Promise<boolean> {
+  async testConnection(timeout = 2000): Promise<boolean> {
     try {
       const response = await this.fetchWithTimeout(
         `${this.config.baseUrl}/health`,
         { method: 'GET' },
-        5000
+        timeout
       )
       return response.ok
     } catch (error) {
@@ -149,7 +149,7 @@ export class LlamaCppProvider extends BaseProvider {
         const response = await this.fetchWithTimeout(
           `${this.config.baseUrl}/v1/models`,
           { method: 'GET' },
-          5000
+          timeout
         )
         return response.ok
       } catch {

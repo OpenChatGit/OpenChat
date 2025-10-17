@@ -38,7 +38,11 @@ export class LMStudioProvider extends BaseProvider {
         details: model,
       }))
     } catch (error) {
-      console.error('LM Studio listModels error:', error)
+      // Silently handle connection errors - provider is likely not running
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      if (!errorMessage.includes('Failed to fetch') && !errorMessage.includes('ERR_CONNECTION_REFUSED')) {
+        console.warn('LM Studio listModels error:', error)
+      }
       return []
     }
   }
@@ -168,7 +172,7 @@ export class LMStudioProvider extends BaseProvider {
     return fullContent
   }
 
-  async testConnection(): Promise<boolean> {
+  async testConnection(timeout = 2000): Promise<boolean> {
     try {
       const response = await this.fetchWithTimeout(
         `${this.config.baseUrl}/v1/models`,
@@ -176,7 +180,7 @@ export class LMStudioProvider extends BaseProvider {
           method: 'GET',
           headers: this.buildHeaders(),
         },
-        5000
+        timeout
       )
       return response.ok
     } catch (error) {

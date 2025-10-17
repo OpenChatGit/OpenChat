@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
-import { Settings, MoreVertical } from 'lucide-react'
-import { Button } from './ui/Button'
+import { MoreVertical } from 'lucide-react'
+import { ProfileButton } from './ProfileButton'
 import type { ChatSession } from '../types'
 import { formatTimestamp } from '../lib/utils'
 import { cn } from '../lib/utils'
@@ -224,16 +224,9 @@ export function Sidebar({
         )}
       </div>
 
-      {/* Footer */}
-      <div className="p-3">
-        <Button
-          onClick={onOpenSettings}
-          variant="ghost"
-          className="w-full justify-start gap-2"
-        >
-          <Settings className="w-4 h-4" />
-          Settings
-        </Button>
+      {/* Footer - Profile Button */}
+      <div className="p-3 border-t" style={{ borderColor: 'rgba(255, 255, 255, 0.1)' }}>
+        <ProfileButton onOpenSettings={onOpenSettings} />
       </div>
     </div>
   )

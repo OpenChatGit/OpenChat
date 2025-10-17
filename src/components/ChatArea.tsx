@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { ChatMessage } from './ChatMessage'
 import { ChatInput } from './ChatInput'
 import type { ChatSession, ProviderConfig, ModelInfo } from '../types'
-import type { RendererPlugin } from '../plugins/types'
+import type { RendererPlugin } from '../plugins/core'
 
 interface ChatAreaProps {
   session: ChatSession | null

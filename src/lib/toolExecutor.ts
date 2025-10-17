@@ -1,8 +1,7 @@
 // Tool Executor - Executes tool calls from AI models
 
 import type { ToolCall, ToolCallResult, ToolDefinition } from '../types/tools'
-import type { PluginManager } from '../plugins/PluginManager'
-import type { ToolPlugin } from '../plugins/types'
+import type { PluginManager, ToolPlugin } from '../plugins/core'
 
 export class ToolExecutor {
   private pluginManager: PluginManager
@@ -53,8 +52,12 @@ export class ToolExecutor {
 
       console.log(`Executing tool: ${functionName}`, args)
 
-      // Execute the tool
-      const result = await plugin.execute(args)
+      // Execute the tool with context
+      const context = {
+        sessionId: '', // TODO: Get from session
+        messageId: toolCall.id
+      }
+      const result = await plugin.execute(args, context)
 
       return {
         toolCallId: toolCall.id,

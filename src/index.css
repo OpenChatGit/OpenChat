@@ -1,5 +1,4 @@
 @import "tailwindcss";
-@import "highlight.js/styles/github-dark.css";
 @import "katex/dist/katex.min.css";
 
 @theme {
@@ -12,8 +11,8 @@
   --color-card-foreground: #ECECEC;
   --color-popover: #1B1B1C;
   --color-popover-foreground: #ECECEC;
-  --color-primary: #10A37F;
-  --color-primary-foreground: #FFFFFF;
+  --color-primary: #FFFFFF;
+  --color-primary-foreground: #151517;
   --color-secondary: #2A2A2C;
   --color-secondary-foreground: #ECECEC;
   --color-muted: #2A2A2C;
@@ -24,7 +23,7 @@
   --color-destructive-foreground: #FFFFFF;
   --color-border: #2A2A2C;
   --color-input: #2A2A2C;
-  --color-ring: #10A37F;
+  --color-ring: #FFFFFF;
   --radius: 0.5rem;
 }
 
@@ -79,4 +78,183 @@ body {
 .prose pre code {
   background: transparent;
   padding: 0;
+}
+
+/* Enhanced typography for AI responses */
+.markdown-content {
+  /* Base text */
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--color-foreground);
+  
+  /* Headings */
+  h1 {
+    font-size: 2em;
+    margin: 1.5em 0 0.5em;
+    font-weight: 600;
+    line-height: 1.3;
+  }
+  
+  h2 {
+    font-size: 1.5em;
+    margin: 1.3em 0 0.5em;
+    font-weight: 600;
+    line-height: 1.3;
+  }
+  
+  h3 {
+    font-size: 1.25em;
+    margin: 1.2em 0 0.5em;
+    font-weight: 600;
+    line-height: 1.3;
+  }
+  
+  h4 {
+    font-size: 1.1em;
+    margin: 1.1em 0 0.5em;
+    font-weight: 600;
+    line-height: 1.3;
+  }
+  
+  /* Paragraphs */
+  p {
+    margin: 1em 0;
+  }
+  
+  p:first-child {
+    margin-top: 0;
+  }
+  
+  p:last-child {
+    margin-bottom: 0;
+  }
+  
+  /* Lists */
+  ul, ol {
+    margin: 1em 0;
+    padding-left: 2em;
+  }
+  
+  li {
+    margin: 0.5em 0;
+  }
+  
+  li > p {
+    margin: 0.25em 0;
+  }
+  
+  /* Nested lists */
+  li > ul,
+  li > ol {
+    margin: 0.5em 0;
+  }
+  
+  /* Code */
+  code {
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 0.9em;
+  }
+  
+  /* Inline code */
+  :not(pre) > code {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 0.2em 0.4em;
+    border-radius: 3px;
+    color: var(--color-foreground);
+  }
+  
+  /* Code blocks */
+  pre {
+    margin: 1.5em 0;
+    border-radius: 0.5rem;
+    overflow-x: auto;
+  }
+  
+  pre code {
+    background: transparent;
+    padding: 0;
+  }
+  
+  /* Blockquotes */
+  blockquote {
+    border-left: 4px solid rgba(255, 255, 255, 0.3);
+    padding-left: 1em;
+    margin: 1em 0;
+    color: rgba(255, 255, 255, 0.7);
+  }
+  
+  blockquote > p:first-child {
+    margin-top: 0;
+  }
+  
+  blockquote > p:last-child {
+    margin-bottom: 0;
+  }
+  
+  /* Tables */
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 1.5em 0;
+    display: block;
+    overflow-x: auto;
+  }
+  
+  thead {
+    background: rgba(255, 255, 255, 0.05);
+  }
+  
+  th, td {
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    padding: 0.75em 1em;
+    text-align: left;
+  }
+  
+  th {
+    font-weight: 600;
+  }
+  
+  /* Links */
+  a {
+    color: #58a6ff;
+    text-decoration: none;
+  }
+  
+  a:hover {
+    text-decoration: underline;
+  }
+  
+  /* Horizontal rules */
+  hr {
+    border: none;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    margin: 2em 0;
+  }
+  
+  /* Images */
+  img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 0.5rem;
+    margin: 1em 0;
+  }
+  
+  /* Task lists */
+  input[type="checkbox"] {
+    margin-right: 0.5em;
+  }
+  
+  /* Strikethrough */
+  del {
+    opacity: 0.7;
+  }
+  
+  /* Strong and emphasis */
+  strong {
+    font-weight: 600;
+  }
+  
+  em {
+    font-style: italic;
+  }
 }

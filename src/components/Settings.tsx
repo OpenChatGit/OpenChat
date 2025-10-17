@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { X, Check, AlertCircle, RefreshCw } from 'lucide-react'
+import { Check, AlertCircle, RefreshCw } from 'lucide-react'
 import { Button } from './ui/Button'
 import { Input } from './ui/Input'
 import type { ProviderConfig, ModelInfo } from '../types'
@@ -11,7 +11,7 @@ interface SettingsProps {
   models: ModelInfo[]
   selectedModel: string
   isLoadingModels: boolean
-  onClose: () => void
+  onClose?: () => void
   onSelectProvider: (provider: ProviderConfig) => void
   onSelectModel: (model: string) => void
   onUpdateProvider: (provider: ProviderConfig) => void
@@ -25,7 +25,6 @@ export function Settings({
   models,
   selectedModel,
   isLoadingModels,
-  onClose,
   onSelectProvider,
   onSelectModel,
   onUpdateProvider,
@@ -49,18 +48,7 @@ export function Settings({
   }
 
   return (
-    <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center">
-      <div className="bg-background border border-border rounded-lg shadow-lg w-full max-w-3xl max-h-[80vh] flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-border">
-          <h2 className="text-2xl font-semibold">Settings</h2>
-          <Button variant="ghost" size="icon" onClick={onClose}>
-            <X className="w-5 h-5" />
-          </Button>
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+    <div className="space-y-6">
           {/* Provider Selection */}
           <div>
             <h3 className="text-lg font-semibold mb-3">Provider</h3>
@@ -91,7 +79,7 @@ export function Settings({
                         {testResults[provider.type] === null ? (
                           <RefreshCw className="w-4 h-4 animate-spin text-muted-foreground" />
                         ) : testResults[provider.type] ? (
-                          <Check className="w-4 h-4 text-green-500" />
+                          <Check className="w-4 h-4 text-white" />
                         ) : (
                           <AlertCircle className="w-4 h-4 text-destructive" />
                         )}
@@ -178,50 +166,47 @@ export function Settings({
               </div>
             </div>
           )}
-        </div>
-
-        {/* Edit Provider Modal */}
-        {editingProvider && (
-          <div className="absolute inset-0 bg-background/95 backdrop-blur-sm flex items-center justify-center p-6">
-            <div className="bg-card border border-border rounded-lg p-6 w-full max-w-md">
-              <h3 className="text-lg font-semibold mb-4">Edit {editingProvider.name}</h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="text-sm font-medium mb-2 block">Name</label>
-                  <Input
-                    value={editingProvider.name}
-                    onChange={(e) =>
-                      setEditingProvider({ ...editingProvider, name: e.target.value })
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium mb-2 block">Base URL</label>
-                  <Input
-                    value={editingProvider.baseUrl}
-                    onChange={(e) =>
-                      setEditingProvider({ ...editingProvider, baseUrl: e.target.value })
-                    }
-                    placeholder="http://localhost:11434"
-                  />
-                </div>
-                <div className="flex gap-2 pt-4">
-                  <Button onClick={handleSaveProvider} className="flex-1">
-                    Save
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    onClick={() => setEditingProvider(null)}
-                    className="flex-1"
-                  >
-                    Cancel
-                  </Button>
-                </div>
+      {/* Edit Provider Modal */}
+      {editingProvider && (
+        <div className="fixed inset-0 bg-background/95 backdrop-blur-sm flex items-center justify-center p-6 z-50">
+          <div className="bg-card border border-border rounded-lg p-6 w-full max-w-md">
+            <h3 className="text-lg font-semibold mb-4">Edit {editingProvider.name}</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm font-medium mb-2 block">Name</label>
+                <Input
+                  value={editingProvider.name}
+                  onChange={(e) =>
+                    setEditingProvider({ ...editingProvider, name: e.target.value })
+                  }
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-2 block">Base URL</label>
+                <Input
+                  value={editingProvider.baseUrl}
+                  onChange={(e) =>
+                    setEditingProvider({ ...editingProvider, baseUrl: e.target.value })
+                  }
+                  placeholder="http://localhost:11434"
+                />
+              </div>
+              <div className="flex gap-2 pt-4">
+                <Button onClick={handleSaveProvider} className="flex-1">
+                  Save
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => setEditingProvider(null)}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
               </div>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   )
 }

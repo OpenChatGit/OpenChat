@@ -4,7 +4,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
-import type { RendererPlugin, PluginMetadata } from '../../types'
+import type { RendererPlugin, PluginMetadata } from '../../core'
 import manifestData from './plugin.json'
 import { CodeBlock } from '../../../components/CodeBlock'
 
@@ -12,6 +12,9 @@ export class MarkdownRendererPlugin implements RendererPlugin {
   metadata: PluginMetadata & { type: 'renderer' } = {
     ...(manifestData as any),
     enabled: true,
+    loaded: false,
+    folderPath: 'src/plugins/builtin/markdown-renderer',
+    isBuiltin: true,
   }
 
   canRender(content: string): boolean {

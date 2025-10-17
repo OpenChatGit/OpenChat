@@ -16,7 +16,7 @@ export abstract class BaseProvider {
     signal?: AbortSignal
   ): Promise<string>
 
-  abstract testConnection(): Promise<boolean>
+  abstract testConnection(timeout?: number): Promise<boolean>
 
   getConfig(): ProviderConfig {
     return this.config
@@ -53,6 +53,9 @@ export abstract class BaseProvider {
       return response
     } catch (error) {
       cleanup()
+      if (error instanceof Error && error.name === 'AbortError') {
+        console.log(`Request to ${url} timed out after ${timeout}ms`)
+      }
       throw error
     } finally {
       if (externalSignal) {

@@ -1,17 +1,23 @@
 import { useState, useEffect } from 'react'
 import { Sidebar } from './components/Sidebar'
 import { ChatArea } from './components/ChatArea'
-import { Settings } from './components/Settings'
+import { SettingsModal } from './components/SettingsModal'
 import { useChat } from './hooks/useChat'
 import { useProviders } from './hooks/useProviders'
 import { usePlugins } from './hooks/usePlugins'
-import type { RendererPlugin } from './plugins/types'
+import { ProviderHealthMonitor } from './services/ProviderHealthMonitor'
+import type { RendererPlugin } from './plugins/core'
 
 function App() {
   const [showSettings, setShowSettings] = useState(false)
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
   
-  const { pluginManager } = usePlugins()
+  const { 
+    pluginManager, 
+    plugins, 
+    enablePlugin, 
+    disablePlugin 
+  } = usePlugins()
   
   const {
     sessions,
@@ -50,6 +56,19 @@ function App() {
       loadModels(selectedProvider)
     }
   }, [selectedProvider, loadModels])
+
+  // Initialize ProviderHealthMonitor on app mount
+  useEffect(() => {
+    const healthMonitor = ProviderHealthMonitor.getInstance()
+    
+    // Start monitoring with current providers
+    healthMonitor.start(providers)
+    
+    // Cleanup: stop monitoring on unmount
+    return () => {
+      healthMonitor.stop()
+    }
+  }, [providers])
 
   const handleNewChat = () => {
     if (!selectedProvider || !selectedModel) {
@@ -147,7 +166,7 @@ function App() {
 
       {/* Settings Modal */}
       {showSettings && (
-        <Settings
+        <SettingsModal
           providers={providers}
           selectedProvider={selectedProvider}
           models={models}
@@ -159,6 +178,9 @@ function App() {
           onUpdateProvider={updateProvider}
           onTestProvider={testProvider}
           onLoadModels={loadModels}
+          plugins={plugins}
+          onEnablePlugin={enablePlugin}
+          onDisablePlugin={disablePlugin}
         />
       )}
     </div>

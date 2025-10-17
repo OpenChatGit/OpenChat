@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { Message } from '../types'
-import type { RendererPlugin } from '../plugins/types'
+import type { RendererPlugin } from '../plugins/core'
 import { ReasoningBlock } from './ReasoningBlock'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faCheck } from '@fortawesome/free-solid-svg-icons'
@@ -13,9 +13,29 @@ interface ChatMessageProps {
 export function ChatMessage({ message, rendererPlugins = [] }: ChatMessageProps) {
   const isUser = message.role === 'user'
   const [isCopied, setIsCopied] = useState(false)
+  
+  // Debounce content rendering during streaming
+  const [debouncedContent, setDebouncedContent] = useState(message.content)
+  
+  useEffect(() => {
+    // If streaming, debounce updates by 150ms
+    if (message.isStreaming) {
+      const timer = setTimeout(() => {
+        setDebouncedContent(message.content)
+      }, 150)
+      
+      return () => clearTimeout(timer)
+    } else {
+      // If not streaming, update immediately
+      setDebouncedContent(message.content)
+    }
+  }, [message.content, message.isStreaming])
 
+  // Use debounced content during streaming, actual content when complete
+  const contentToRender = message.isStreaming ? debouncedContent : message.content
+  
   // Try to find a renderer plugin that can handle this content
-  const renderer = rendererPlugins.find(plugin => plugin.canRender(message.content))
+  const renderer = rendererPlugins.find(plugin => plugin.canRender(contentToRender))
   
   // Parse reasoning blocks from AI messages
   const parseReasoning = (content: string) => {
@@ -26,8 +46,10 @@ export function ChatMessage({ message, rendererPlugins = [] }: ChatMessageProps)
       .replace(/<reasoning>/gi, '<think>')
       .replace(/<\/reasoning>/gi, '</think>')
       // Convert fenced code blocks ```reasoning to <think> blocks
-      .replace(/```reasoning\s*/gi, '<think>')
-      .replace(/```\s*/g, '</think>')
+      // First, replace ```reasoning blocks with <think>...</think>
+      .replace(/```reasoning\s*([\s\S]*?)```/gi, '<think>$1</think>')
+      // Then handle incomplete ```reasoning blocks (during streaming)
+      .replace(/```reasoning\s*([\s\S]*?)$/gi, '<think>$1')
 
     // Check if content has <think> tags
     if (!text.includes('<think>')) {
@@ -107,7 +129,7 @@ export function ChatMessage({ message, rendererPlugins = [] }: ChatMessageProps)
   // AI message - left aligned, plain text, full width
   return (
     <div className="px-4 py-6 group">
-      <div className="max-w-3xl mx-auto">
+      <div className="max-w-3xl mx-auto" style={{ minHeight: '2rem' }}>
         <div className="prose prose-invert max-w-none mb-2">
           {(() => {
             if (message.status === 'cancelled') {
@@ -117,10 +139,10 @@ export function ChatMessage({ message, rendererPlugins = [] }: ChatMessageProps)
                 </div>
               )
             }
-            const hasReasoningTag = message.content && /<(think|thinking|reasoning)>|```reasoning/i.test(message.content)
+            const hasReasoningTag = contentToRender && /<(think|thinking|reasoning)>|```reasoning/i.test(contentToRender)
             
             // If no content yet, show "Reasoning..." indicator
-            if (!message.content) {
+            if (!contentToRender) {
               return (
                 <div className="flex items-center gap-2 text-sm text-gray-400">
                   <div className="w-2 h-2 bg-gray-400 rounded-full animate-pulse"></div>
@@ -129,7 +151,7 @@ export function ChatMessage({ message, rendererPlugins = [] }: ChatMessageProps)
               )
             }
             
-            const parts = parseReasoning(message.content)
+            const parts = parseReasoning(contentToRender)
             
             // If parsing returns empty but we have content starting with <think>, show reasoning indicator
             if (parts.length === 0 && hasReasoningTag) {
@@ -156,7 +178,7 @@ export function ChatMessage({ message, rendererPlugins = [] }: ChatMessageProps)
                 {parts.map((part, index) => {
                   if (part.type === 'reasoning') {
                     // Check if reasoning is complete (has closing tag)
-                    const isComplete = /<\/(think|thinking|reasoning)>|```/i.test(message.content)
+                    const isComplete = /<\/(think|thinking|reasoning)>|```/i.test(contentToRender)
                     return <ReasoningBlock key={index} content={part.content} isComplete={isComplete} />
                   }
                   

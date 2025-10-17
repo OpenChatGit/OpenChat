@@ -1,6 +1,6 @@
 import { Plug, Check, X } from 'lucide-react'
 import { Button } from './ui/Button'
-import type { Plugin } from '../plugins/types'
+import type { Plugin } from '../plugins/core'
 import { cn } from '../lib/utils'
 
 interface PluginSettingsProps {

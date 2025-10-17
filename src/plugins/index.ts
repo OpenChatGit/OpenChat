@@ -1,5 +1,11 @@
-// Plugin system exports
+/**
+ * Plugin System
+ * 
+ * Main entry point for the OpenChat plugin system
+ */
 
-export * from './types'
-export { PluginManager } from './PluginManager'
+// Core system
+export * from './core'
+
+// Built-in plugins
 export * from './builtin'

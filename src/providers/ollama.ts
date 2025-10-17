@@ -17,7 +17,11 @@ export class OllamaProvider extends BaseProvider {
       const data = await response.json()
       return data.models || []
     } catch (error) {
-      console.error('Ollama listModels error:', error)
+      // Silently handle connection errors - provider is likely not running
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      if (!errorMessage.includes('Failed to fetch') && !errorMessage.includes('ERR_CONNECTION_REFUSED')) {
+        console.warn('Ollama listModels error:', error)
+      }
       return []
     }
   }
@@ -144,12 +148,12 @@ export class OllamaProvider extends BaseProvider {
     return fullContent
   }
 
-  async testConnection(): Promise<boolean> {
+  async testConnection(timeout = 2000): Promise<boolean> {
     try {
       const response = await this.fetchWithTimeout(
-        `${this.config.baseUrl}/api/tags`,
+        `${this.config.baseUrl}/api/version`,
         { method: 'GET' },
-        5000
+        timeout
       )
       return response.ok
     } catch (error) {

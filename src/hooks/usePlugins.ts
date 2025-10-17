@@ -1,88 +1,89 @@
 import { useState, useEffect, useMemo } from 'react'
-import { PluginManager } from '../plugins/PluginManager'
-import { MarkdownRendererPlugin } from '../plugins/core/markdown-renderer'
-import { MessageExportPlugin } from '../plugins/optional/message-export'
-import { WebSearchToolPlugin } from '../global_tools/web-search/plugin'
-import type { Plugin, PluginContext } from '../plugins/types'
-import { loadLocal, saveLocal } from '../lib/utils'
+import { PluginManager } from '../plugins/core/PluginManager'
+import { MarkdownRendererPlugin } from '../plugins/builtin/markdown-renderer'
+import { MessageExportPlugin } from '../plugins/builtin/MessageExportPlugin'
+import { WebSearchToolPlugin } from '../plugins/builtin/web-search/plugin'
+import type { BasePlugin, AppContext } from '../plugins/core'
 
 export function usePlugins() {
-  const [plugins, setPlugins] = useState<Plugin[]>([])
+  const [plugins, setPlugins] = useState<BasePlugin[]>([])
   
-  // Create plugin manager with context
+  // Create app context
+  const appContext: AppContext = {
+    version: '1.0.0',
+    getSession: () => null,
+    getSessions: () => [],
+    getProviders: () => [],
+    getModels: () => [],
+    getCurrentProvider: () => null,
+    getCurrentModel: () => ''
+  }
+  
+  // Create plugin manager
   const pluginManager = useMemo(() => {
-    const context: PluginContext = {
-      notify: (message: string, type = 'info') => {
-        console.log(`[${type.toUpperCase()}] ${message}`)
-      },
-    }
-    
-    return new PluginManager(context)
+    return new PluginManager(appContext)
   }, [])
 
   // Initialize plugins
   useEffect(() => {
     const initPlugins = async () => {
-      // Register CORE plugins (always enabled, cannot be disabled)
-      await pluginManager.register(new MarkdownRendererPlugin())
+      try {
+        // Register CORE plugins (always enabled, cannot be disabled)
+        await pluginManager.register(new MarkdownRendererPlugin())
 
-      // Register OPTIONAL plugins (can be enabled/disabled by user)
-      await pluginManager.register(new MessageExportPlugin())
+        // Register OPTIONAL plugins (can be enabled/disabled by user)
+        await pluginManager.register(new MessageExportPlugin())
 
-      // Register GLOBAL TOOLS (available to all users)
-      await pluginManager.register(new WebSearchToolPlugin())
+        // Register GLOBAL TOOLS (available to all users)
+        await pluginManager.register(new WebSearchToolPlugin())
 
-      // Restore persisted enabled states
-      const persisted = loadLocal<Record<string, boolean>>('oc.plugins.enabled', {})
-      pluginManager.getAll().forEach(async (p) => {
-        const desired = persisted[p.metadata.id]
-        if (typeof desired === 'boolean' && desired !== p.metadata.enabled) {
-          if (desired) await pluginManager.enable(p.metadata.id)
-          else await pluginManager.disable(p.metadata.id)
-        }
-      })
+        // Load saved plugin state
+        pluginManager.loadPluginState()
 
-      // Update state
-      setPlugins(pluginManager.getAll())
+        // Update state - get ALL plugins (enabled and disabled)
+        setPlugins(pluginManager.getAllPlugins())
+      } catch (error) {
+        console.error('Failed to initialize plugins:', error)
+      }
     }
 
     initPlugins()
   }, [pluginManager])
 
   const enablePlugin = async (pluginId: string) => {
-    await pluginManager.enable(pluginId)
-    const list = pluginManager.getAll()
-    setPlugins(list)
-    const map: Record<string, boolean> = {}
-    list.forEach(p => { map[p.metadata.id] = !!p.metadata.enabled })
-    saveLocal('oc.plugins.enabled', map)
+    try {
+      await pluginManager.enable(pluginId)
+      setPlugins(pluginManager.getAllPlugins())
+    } catch (error) {
+      console.error(`Failed to enable plugin ${pluginId}:`, error)
+    }
   }
 
   const disablePlugin = async (pluginId: string) => {
-    await pluginManager.disable(pluginId)
-    const list = pluginManager.getAll()
-    setPlugins(list)
-    const map: Record<string, boolean> = {}
-    list.forEach(p => { map[p.metadata.id] = !!p.metadata.enabled })
-    saveLocal('oc.plugins.enabled', map)
+    try {
+      await pluginManager.disable(pluginId)
+      setPlugins(pluginManager.getAllPlugins())
+    } catch (error) {
+      console.error(`Failed to disable plugin ${pluginId}:`, error)
+    }
   }
 
-  const registerPlugin = async (plugin: Plugin) => {
-    await pluginManager.register(plugin)
-    const list = pluginManager.getAll()
-    setPlugins(list)
-    const map: Record<string, boolean> = {}
-    list.forEach(p => { map[p.metadata.id] = !!p.metadata.enabled })
-    saveLocal('oc.plugins.enabled', map)
+  const registerPlugin = async (plugin: BasePlugin) => {
+    try {
+      await pluginManager.register(plugin)
+      setPlugins(pluginManager.getAllPlugins())
+    } catch (error) {
+      console.error('Failed to register plugin:', error)
+    }
   }
 
   const unregisterPlugin = async (pluginId: string) => {
-    await pluginManager.unregister(pluginId)
-    const list = pluginManager.getAll()
-    setPlugins(list)
-    const map: Record<string, boolean> = {}
-    list.forEach(p => { map[p.metadata.id] = !!p.metadata.enabled })
-    saveLocal('oc.plugins.enabled', map)
+    try {
+      await pluginManager.unregister(pluginId)
+      setPlugins(pluginManager.getAllPlugins())
+    } catch (error) {
+      console.error(`Failed to unregister plugin ${pluginId}:`, error)
+    }
   }
 
   return {

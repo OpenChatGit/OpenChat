@@ -1,6 +1,6 @@
 // Message Export Plugin - export chat sessions to various formats
 
-import type { ToolPlugin } from '../types'
+import type { ToolPlugin } from '../core'
 import type { ChatSession } from '../../types'
 
 export class MessageExportPlugin implements ToolPlugin {
@@ -13,6 +13,9 @@ export class MessageExportPlugin implements ToolPlugin {
     type: 'tool' as const,
     appVersion: '1.0.0',
     enabled: true,
+    loaded: false,
+    folderPath: 'src/plugins/builtin/message-export',
+    isBuiltin: true,
   }
 
   getTool() {

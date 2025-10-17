@@ -4,6 +4,8 @@
 
 OpenChat is a modular, cross-platform LLM chat application built with Tauri, React, and TypeScript. It delivers a ChatGPT-style interface that connects seamlessly to local AI providers such as Ollama, LM Studio, and llama.cpp.
 
+> **⚠️ Notice:** Experimental features have been integrated into the main branch as best as possible. Some features may still be in development or require additional testing. Please report any issues you encounter.
+
 ## Table of Contents
 
 - [Features](#features)
@@ -38,6 +40,8 @@ OpenChat is a modular, cross-platform LLM chat application built with Tauri, Rea
 | **Ollama** | `http://localhost:11434` | Local LLM runtime and default backend. |
 | **LM Studio** | `http://localhost:1234` | Desktop application for running quantized models. |
 | **llama.cpp** | `http://localhost:8080` | High-performance inference server for GGUF models. |
+
+> **📢 Deprecation Notice:** LM Studio integration will be removed in upcoming updates. Despite this project being largely built around LM Studio, there were disagreements in the LM Studio Discord regarding alleged self-promotion (which never occurred), and the project was deemed "out of scope" for their community. We respect their decision and will focus on other providers moving forward.
 
 ## Getting Started
 
@@ -74,39 +78,6 @@ OpenChat is a modular, cross-platform LLM chat application built with Tauri, Rea
    npm run build
    npm run tauri build
    ```
-
-## Architecture
-
-OpenChat keeps UI, provider integrations, and plugin logic decoupled to simplify maintenance and extension:
-
-```
-src/
-├── components/       # React UI components
-│   ├── ui/          # Reusable UI components
-│   ├── Sidebar.tsx  # Chat session sidebar
-│   ├── ChatArea.tsx # Main chat interface
-│   └── Settings.tsx # Provider configuration
-├── providers/       # Provider implementations
-│   ├── base.ts      # Base provider interface
-│   ├── ollama.ts    # Ollama provider
-│   ├── lmstudio.ts  # LM Studio provider
-│   ├── llamacpp.ts  # llama.cpp provider
-│   └── factory.ts   # Provider factory
-├── plugins/         # Plugin system
-│   ├── types.ts     # Plugin type definitions
-│   ├── PluginManager.ts # Plugin lifecycle management
-│   ├── builtin/     # Built-in plugins
-│   │   ├── MarkdownPlugin.tsx
-│   │   ├── CodeCopyPlugin.tsx
-│   │   └── MessageExportPlugin.ts
-│   └── examples/    # Example plugins
-├── hooks/           # React hooks
-│   ├── useChat.ts   # Chat state management
-│   ├── useProviders.ts # Provider management
-│   └── usePlugins.ts # Plugin management
-├── types/           # TypeScript type definitions
-└── lib/             # Utility functions
-```
 
 ## Web Search Pipeline
 
