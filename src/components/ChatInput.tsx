@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faArrowUp, faGlobe } from '@fortawesome/free-solid-svg-icons'
+import { faArrowUp } from '@fortawesome/free-solid-svg-icons'
+import { Globe } from 'lucide-react'
 import { ModelSelector } from './ModelSelector'
 import { cn } from '../lib/utils'
 import type { ProviderConfig, ModelInfo } from '../types'
@@ -18,8 +19,8 @@ interface ChatInputProps {
   onSelectModel?: (model: string) => void
   onLoadModels?: (provider: ProviderConfig) => void
   isLoadingModels?: boolean
-  webSearchEnabled?: boolean
-  onToggleWebSearch?: () => void
+  autoSearchEnabled?: boolean
+  onToggleAutoSearch?: () => void
 }
 
 export function ChatInput({ 
@@ -35,8 +36,8 @@ export function ChatInput({
   onSelectModel = () => {},
   onLoadModels = () => {},
   isLoadingModels = false,
-  webSearchEnabled = false,
-  onToggleWebSearch = () => {}
+  autoSearchEnabled = false,
+  onToggleAutoSearch = () => {}
 }: ChatInputProps) {
   const [input, setInput] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -97,60 +98,61 @@ export function ChatInput({
             
             {/* Bottom Section with Web Search Toggle, Model Selector and Send Button */}
             <div className="px-4 pb-3 flex items-center justify-between gap-2">
-              {/* Web Search Toggle - Left Side */}
-              <button
-                type="button"
-                onClick={onToggleWebSearch}
-                className="w-8 h-8 rounded-full flex items-center justify-center transition-all flex-shrink-0 hover:bg-white/10"
-                title={webSearchEnabled ? 'Web Search aktiviert' : 'Web Search deaktiviert'}
-              >
-                <FontAwesomeIcon 
-                  icon={faGlobe} 
-                  className="w-4 h-4 transition-colors"
-                  style={{ 
-                    color: webSearchEnabled ? '#3B82F6' : '#FFFFFF'
-                  }}
-                />
-              </button>
-
-              {/* Right Side: Model Selector and Send Button */}
-              <div className="flex items-center gap-2">
-                {/* Model Selector */}
-                {providers.length > 0 && (
-                <ModelSelector
-                  providers={providers}
-                  selectedProvider={selectedProvider}
-                  selectedModel={selectedModel}
-                  models={models}
-                  onSelectProvider={onSelectProvider}
-                  onSelectModel={onSelectModel}
-                  onLoadModels={onLoadModels}
-                  isLoadingModels={isLoadingModels}
-                  openUpwards={!centered}
-                />
-                )}
-                
-                {/* Send/Stop Button */}
+                {/* Left Side: Web Search Toggle */}
                 <button
-                  type="submit"
-                  disabled={!input.trim() || disabled || isGenerating}
-                  className="w-8 h-8 rounded-full flex items-center justify-center transition-all flex-shrink-0"
-                  style={{
-                    backgroundColor: input.trim() && !disabled && !isGenerating ? '#FFFFFF' : '#1A1A1C',
-                    cursor: input.trim() && !disabled && !isGenerating ? 'pointer' : 'not-allowed'
-                  }}
-                  title="Send message"
-                  aria-label="Send message"
+                  type="button"
+                  onClick={onToggleAutoSearch}
+                  className="w-8 h-8 rounded-full flex items-center justify-center transition-all flex-shrink-0 hover:bg-white/10"
+                  title={autoSearchEnabled ? 'Web search enabled' : 'Web search disabled'}
+                  aria-label={autoSearchEnabled ? 'Disable web search' : 'Enable web search'}
                 >
-                  <FontAwesomeIcon 
-                    icon={faArrowUp} 
-                    className="w-4 h-4"
+                  <Globe 
+                    className="w-4 h-4 transition-colors"
                     style={{ 
-                      color: input.trim() && !disabled && !isGenerating ? '#000000' : '#565656'
+                      color: autoSearchEnabled ? 'rgb(59, 130, 246)' : '#8E8E93',
+                      strokeWidth: 2
                     }}
                   />
                 </button>
-              </div>
+
+                {/* Right Side: Model Selector and Send Button */}
+                <div className="flex items-center gap-2">
+                  {/* Model Selector */}
+                  {providers.length > 0 && (
+                  <ModelSelector
+                    providers={providers}
+                    selectedProvider={selectedProvider}
+                    selectedModel={selectedModel}
+                    models={models}
+                    onSelectProvider={onSelectProvider}
+                    onSelectModel={onSelectModel}
+                    onLoadModels={onLoadModels}
+                    isLoadingModels={isLoadingModels}
+                    openUpwards={!centered}
+                  />
+                  )}
+                  
+                  {/* Send/Stop Button */}
+                  <button
+                    type="submit"
+                    disabled={!input.trim() || disabled || isGenerating}
+                    className="w-8 h-8 rounded-full flex items-center justify-center transition-all flex-shrink-0"
+                    style={{
+                      backgroundColor: input.trim() && !disabled && !isGenerating ? '#FFFFFF' : '#1A1A1C',
+                      cursor: input.trim() && !disabled && !isGenerating ? 'pointer' : 'not-allowed'
+                    }}
+                    title="Send message"
+                    aria-label="Send message"
+                  >
+                    <FontAwesomeIcon 
+                      icon={faArrowUp} 
+                      className="w-4 h-4"
+                      style={{ 
+                        color: input.trim() && !disabled && !isGenerating ? '#000000' : '#565656'
+                      }}
+                    />
+                  </button>
+                </div>
             </div>
           </form>
         </div>

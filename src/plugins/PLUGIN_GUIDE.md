@@ -219,13 +219,6 @@ Renders markdown with syntax highlighting and math support.
 **Type**: Renderer
 **Features**: GFM, code highlighting, KaTeX math, tables
 
-### Web Search Tool
-Provides web search capabilities with RAG processing.
-
-**Location**: `src/plugins/builtin/web-search/`
-**Type**: Tool
-**Features**: DuckDuckGo search, content scraping, relevance ranking
-
 ## Creating a Custom Plugin
 
 ### 1. Create Plugin File
@@ -294,7 +287,6 @@ import { MyCustomPlugin } from './custom/my-plugin'
 export function loadPlugins(manager: PluginManager) {
   // Load built-in plugins
   manager.register(new MarkdownRendererPlugin())
-  manager.register(new WebSearchPlugin())
   
   // Load custom plugin
   manager.register(new MyCustomPlugin())

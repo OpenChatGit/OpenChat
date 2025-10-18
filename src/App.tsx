@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Sidebar } from './components/Sidebar'
 import { ChatArea } from './components/ChatArea'
 import { SettingsModal } from './components/SettingsModal'
-import { useChat } from './hooks/useChat'
+import { useChatWithTools } from './hooks/useChatWithTools'
 import { useProviders } from './hooks/useProviders'
 import { usePlugins } from './hooks/usePlugins'
 import { ProviderHealthMonitor } from './services/ProviderHealthMonitor'
@@ -24,18 +24,15 @@ function App() {
     currentSession,
     setCurrentSession,
     isGenerating,
-    webSearchEnabled,
-    setWebSearchEnabled,
+    autoSearchEnabled,
+    setAutoSearchEnabled,
+    webSearchSettings,
+    updateWebSearchSettings,
     createSession,
     sendMessage,
     deleteSession,
     updateSessionTitle,
-  } = useChat()
-  
-  // Log web search state changes
-  useEffect(() => {
-    console.log('🌐 Web Search State Changed:', webSearchEnabled ? 'ENABLED ✅' : 'DISABLED ❌')
-  }, [webSearchEnabled])
+  } = useChatWithTools(pluginManager)
 
   const {
     providers,
@@ -103,7 +100,7 @@ function App() {
     const session = createSession(selectedProvider, selectedModel, userMessage)
     
     // Now send to AI (reuse existing user message to avoid duplicates)
-    await sendMessage(content, selectedProvider, selectedModel, session, userMessage.id)
+    await sendMessage(content, selectedProvider, selectedModel, session)
   }
 
   return (
@@ -159,8 +156,8 @@ function App() {
           onSelectModel={setSelectedModel}
           onLoadModels={loadModels}
           isLoadingModels={isLoadingModels}
-          webSearchEnabled={webSearchEnabled}
-          onToggleWebSearch={() => setWebSearchEnabled(!webSearchEnabled)}
+          autoSearchEnabled={autoSearchEnabled}
+          onToggleAutoSearch={() => setAutoSearchEnabled(!autoSearchEnabled)}
         />
       </div>
 
@@ -172,12 +169,14 @@ function App() {
           models={models}
           selectedModel={selectedModel}
           isLoadingModels={isLoadingModels}
+          webSearchSettings={webSearchSettings || undefined}
           onClose={() => setShowSettings(false)}
           onSelectProvider={setSelectedProvider}
           onSelectModel={setSelectedModel}
           onUpdateProvider={updateProvider}
           onTestProvider={testProvider}
           onLoadModels={loadModels}
+          onUpdateWebSearchSettings={updateWebSearchSettings}
           plugins={plugins}
           onEnablePlugin={enablePlugin}
           onDisablePlugin={disablePlugin}

@@ -16,6 +16,18 @@ export interface Message {
     provider?: string;
     tokensUsed?: number;
     renderTime?: number; // Track rendering performance
+    autoSearch?: {
+      triggered: boolean;
+      query: string;
+      sources: Array<{
+        url: string;
+        title: string;
+        domain: string;
+        publishedDate?: Date;
+      }>;
+      chunkCount: number;
+      searchTime: number;
+    };
   };
 }
 
@@ -48,6 +60,7 @@ export interface ProviderConfig {
   baseUrl: string;
   enabled: boolean;
   apiKey?: string;
+  hiddenModels?: string[];
 }
 
 export interface ChatCompletionRequest {

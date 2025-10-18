@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import type { ProviderConfig, ModelInfo } from '../types'
 import { ProviderFactory } from '../providers'
 import { loadLocal, saveLocal, isValidProviderConfig } from '../lib/utils'
+import { setApiKey, getApiKey, removeApiKey } from '../lib/secureStorage'
 
 export function useProviders() {
   const [providers, setProviders] = useState<ProviderConfig[]>([])
@@ -22,21 +23,33 @@ export function useProviders() {
 
     // Load from localStorage if available
     const saved = loadLocal<any>('providers', null)
+    let loadedProviders: ProviderConfig[]
+    
     if (saved) {
       const parsed = Array.isArray(saved) ? saved.filter(isValidProviderConfig) as ProviderConfig[] : []
       const existingTypes = new Set(parsed.map((p: ProviderConfig) => p.type))
       const newProviders = defaultProviders.filter(p => !existingTypes.has(p.type))
-      setProviders([...parsed, ...newProviders])
+      loadedProviders = [...parsed, ...newProviders]
     } else {
-      setProviders(defaultProviders)
+      loadedProviders = defaultProviders
     }
+    
+    // Hydrate API keys from secure storage
+    loadedProviders = loadedProviders.map(provider => {
+      const apiKey = getApiKey(provider.type)
+      return apiKey ? { ...provider, apiKey } : provider
+    })
+    
+    setProviders(loadedProviders)
 
     // Load selected provider
     const savedProvider = loadLocal<ProviderConfig | null>('selectedProvider', null)
     if (savedProvider && isValidProviderConfig(savedProvider)) {
-      setSelectedProvider(savedProvider)
+      // Hydrate API key for selected provider
+      const apiKey = getApiKey(savedProvider.type)
+      setSelectedProvider(apiKey ? { ...savedProvider, apiKey } : savedProvider)
     } else {
-      setSelectedProvider(defaultProviders[0])
+      setSelectedProvider(loadedProviders[0])
     }
 
     // Load selected model (normalize previously double-encoded values)
@@ -61,16 +74,38 @@ export function useProviders() {
     }
   }, [])
 
-  // Save to localStorage when providers change
+  // Save to localStorage when providers change (without API keys)
   useEffect(() => {
     if (providers.length > 0) {
-      saveLocal('providers', providers)
+      // Remove API keys before saving to localStorage
+      const providersWithoutKeys = providers.map(({ apiKey, ...rest }) => rest)
+      saveLocal('providers', providersWithoutKeys)
+      
+      // Save or remove API keys from secure storage
+      providers.forEach(provider => {
+        if (provider.apiKey) {
+          setApiKey(provider.type, provider.apiKey)
+        } else {
+          // Remove API key if it's empty (user cleared it)
+          removeApiKey(provider.type)
+        }
+      })
     }
   }, [providers])
 
   useEffect(() => {
     if (selectedProvider) {
-      saveLocal('selectedProvider', selectedProvider)
+      // Remove API key before saving to localStorage
+      const { apiKey, ...providerWithoutKey } = selectedProvider
+      saveLocal('selectedProvider', providerWithoutKey)
+      
+      // Save or remove API key from secure storage
+      if (apiKey) {
+        setApiKey(selectedProvider.type, apiKey)
+      } else {
+        // Remove API key if it's empty (user cleared it)
+        removeApiKey(selectedProvider.type)
+      }
     }
   }, [selectedProvider])
 

@@ -1,17 +1,21 @@
-![OpenChat screenshot](https://i.imgur.com/UnQdl8P.png)
+﻿![OpenChat screenshot](https://i.imgur.com/5h9F6rg.png)
 
 # OpenChat
 
+![Version](https://img.shields.io/badge/version-0.4.6%20(test)-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
+![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
+
 OpenChat is a modular, cross-platform LLM chat application built with Tauri, React, and TypeScript. It delivers a ChatGPT-style interface that connects seamlessly to local AI providers such as Ollama, LM Studio, and llama.cpp.
 
-> **⚠️ Notice:** Experimental features have been integrated into the main branch as best as possible. Some features may still be in development or require additional testing. Please report any issues you encounter.
+> ⚠️ **Notice:** Experimental features have been integrated into the main branch as best as possible. Some features may still be in development or require additional testing. Please report any issues you encounter.
 
 ## Table of Contents
 
 - [Features](#features)
 - [Supported Providers](#supported-providers)
 - [Getting Started](#getting-started)
-- [Architecture](#architecture)
+- [Web Search System](#web-search-system)
 - [Adding a New Provider](#adding-a-new-provider)
 - [Creating Custom Plugins](#creating-custom-plugins)
 - [Configuration](#configuration)
@@ -31,7 +35,7 @@ OpenChat is a modular, cross-platform LLM chat application built with Tauri, Rea
 - **Flexible configuration** – Switch providers, models, and credentials from the UI.
 - **Rich Markdown support** – Render code blocks, tables, and inline formatting.
 - **Mathematical rendering** – Render LaTeX expressions through KaTeX.
-- **Puppeteer web search** – Built-in headless browser pipeline that augments answers with fresh web context via RAG.
+- **Free web search** – Completely rebuilt web search system that's 100% free, with no API keys required. Features intelligent auto-detection, backend scraping, and a streamlined UI with real-time search indicators.
 
 ## Supported Providers
 
@@ -41,7 +45,7 @@ OpenChat is a modular, cross-platform LLM chat application built with Tauri, Rea
 | **LM Studio** | `http://localhost:1234` | Desktop application for running quantized models. |
 | **llama.cpp** | `http://localhost:8080` | High-performance inference server for GGUF models. |
 
-> **📢 Deprecation Notice:** LM Studio integration will be removed in upcoming updates. Despite this project being largely built around LM Studio, there were disagreements in the LM Studio Discord regarding alleged self-promotion (which never occurred), and the project was deemed "out of scope" for their community. We respect their decision and will focus on other providers moving forward.
+> 📢 **Deprecation Notice:** LM Studio integration will be removed in upcoming updates. Despite this project being largely built around LM Studio, there were disagreements in the LM Studio Discord regarding alleged self-promotion (which never occurred), and the project was deemed "out of scope" for their community. We respect their decision and will focus on other providers moving forward.
 
 ## Getting Started
 
@@ -79,17 +83,31 @@ OpenChat is a modular, cross-platform LLM chat application built with Tauri, Rea
    npm run tauri build
    ```
 
-## Web Search Pipeline
+## Web Search System
 
-OpenChat includes a Puppeteer-driven search workflow that enriches model answers with current web information:
+OpenChat features a completely rebuilt web search system that's **100% free** and requires **no API keys**. The new architecture provides intelligent, automatic web search capabilities with a clean, minimal UI.
 
-- **Coordinator** – `WebSearchTool` in `src/global_tools/web-search/index.ts` orchestrates querying, scraping, caching, and formatting.
-- **Headless scraping** – `PuppeteerScraper` in `src/global_tools/web-search/puppeteerScraper.ts` launches the user’s Chromium-based browser through `puppeteer-core` to render dynamic pages.
-- **Fetch fallback** – `WebScraper` in `src/global_tools/web-search/scraper.ts` retrieves HTML via the Tauri backend when no local browser is available.
-- **RAG processing** – `RAGProcessor` in `src/global_tools/web-search/rag.ts` chunks content, ranks relevance, and synthesizes summaries with citations.
-- **Automatic triggers** – `performWebSearch()` in `src/lib/webSearchHelper.ts` decides when to call the pipeline and injects the formatted evidence into the model prompt.
+### Key Features
 
-The system queries DuckDuckGo without API keys, handles JavaScript-heavy pages, and returns structured context that boosts answer reliability for time-sensitive questions.
+- **Completely Free** – No API keys, no costs, no limits. Uses DuckDuckGo search with backend scraping.
+- **Intelligent Auto-Detection** – Automatically determines when web search would be beneficial based on query analysis.
+- **Backend Scraping** – Rust-based Tauri backend handles all web scraping, eliminating the need for Puppeteer or browser dependencies.
+- **Streamlined UI** – Minimal, elegant search indicators:
+  - "Searching web" with animated spinner during search
+  - "Searched Web" with source favicons (up to 5) after completion
+- **RAG Processing** – Chunks content, ranks relevance, and injects structured context into model prompts.
+- **Event-Driven Architecture** – Real-time progress updates through a clean event system.
+- **Lazy Loading** – Search components are loaded on-demand to keep the initial bundle size small.
+
+### Architecture
+
+- **AutoSearchManager** (`src/lib/web-search/autoSearchManager.ts`) – Orchestrates search decisions, execution, and context injection.
+- **SearchOrchestrator** (`src/lib/web-search/searchOrchestrator.ts`) – Coordinates search queries, scraping, and RAG processing.
+- **BackendScraper** (`src/lib/web-search/backendScraper.ts`) – Interfaces with Tauri backend for efficient web scraping.
+- **LazyLoader** (`src/lib/web-search/lazyLoader.ts`) – Dynamically loads search components to optimize performance.
+- **SearchEvents** (`src/lib/web-search/searchEvents.ts`) – Event system for real-time search progress updates.
+
+The system automatically triggers on relevant queries, scrapes content from multiple sources, processes it through RAG, and seamlessly injects the context into your conversation—all without any configuration or API keys.
 
 ## Adding a New Provider
 

@@ -1,21 +1,88 @@
 // Enhanced useChat hook with Tool Call support
 
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import type { ChatSession, Message, ProviderConfig } from '../types'
 import type { ToolCall, ToolCallResult } from '../types/tools'
 import { ProviderFactory } from '../providers'
 import { generateId } from '../lib/utils'
 import { ToolExecutor } from '../lib/toolExecutor'
-import { generateSystemPrompt, parseToolCalls, createToolResultMessage } from '../lib/systemPrompts'
 import type { PluginManager } from '../plugins/core'
+import { AutoSearchManager } from '../lib/web-search/autoSearchManager'
+import type { SearchContext } from '../lib/web-search/types'
+import type { WebSearchSettings } from '../components/WebSearchSettings'
+import { loadWebSearchSettings, saveWebSearchSettings } from '../lib/web-search/settingsStorage'
 
 export function useChatWithTools(pluginManager: PluginManager) {
   const [sessions, setSessions] = useState<ChatSession[]>([])
   const [currentSession, setCurrentSession] = useState<ChatSession | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
-  const [webSearchEnabled, setWebSearchEnabled] = useState(false)
+  const [autoSearchEnabled, setAutoSearchEnabled] = useState(false)
+  const [webSearchSettings, setWebSearchSettings] = useState<WebSearchSettings | null>(null)
   const streamingContentRef = useRef<string>('')
   const toolExecutor = useRef(new ToolExecutor(pluginManager))
+  const autoSearchManager = useRef(new AutoSearchManager())
+  const settingsInitialized = useRef(false)
+
+  // Load settings on mount and apply to AutoSearchManager
+  useEffect(() => {
+    if (settingsInitialized.current) return
+    settingsInitialized.current = true
+    
+    const settings = loadWebSearchSettings()
+    setWebSearchSettings(settings)
+    setAutoSearchEnabled(settings.autoSearchEnabled)
+    
+    // Apply settings to AutoSearchManager
+    autoSearchManager.current.configure({
+      enabled: settings.autoSearchEnabled,
+      maxResults: settings.maxResults,
+      timeout: 30000,
+      outputFormat: 'verbose',
+      maxContextLength: 8000
+    })
+
+    // Apply RAG configuration
+    const ragProcessor = (autoSearchManager.current as any).ragProcessor
+    if (ragProcessor && ragProcessor.configure) {
+      ragProcessor.configure(settings.ragConfig)
+    }
+
+    // Apply cache settings to orchestrator
+    const orchestrator = (autoSearchManager.current as any).orchestrator
+    if (orchestrator && settings.cacheEnabled === false) {
+      orchestrator.clearCache()
+    }
+  }, [])
+
+  // Update settings handler
+  const updateWebSearchSettings = useCallback((newSettings: WebSearchSettings) => {
+    setWebSearchSettings(newSettings)
+    setAutoSearchEnabled(newSettings.autoSearchEnabled)
+    saveWebSearchSettings(newSettings)
+    
+    // Apply settings to AutoSearchManager
+    autoSearchManager.current.configure({
+      enabled: newSettings.autoSearchEnabled,
+      maxResults: newSettings.maxResults,
+      timeout: 30000,
+      outputFormat: 'verbose',
+      maxContextLength: 8000
+    })
+
+    // Apply RAG configuration
+    const ragProcessor = (autoSearchManager.current as any).ragProcessor
+    if (ragProcessor && ragProcessor.configure) {
+      ragProcessor.configure(newSettings.ragConfig)
+    }
+
+    // Apply cache settings
+    const orchestrator = (autoSearchManager.current as any).orchestrator
+    if (orchestrator) {
+      if (newSettings.cacheEnabled === false) {
+        orchestrator.clearCache()
+      }
+    }
+  }, [])
 
   const createSession = useCallback((provider: ProviderConfig, model: string, initialMessage?: Message) => {
     const newSession: ChatSession = {
@@ -111,10 +178,14 @@ export function useChatWithTools(pluginManager: PluginManager) {
 
     // Add tool results as system messages
     for (const result of results) {
+      const content = result.error 
+        ? `Tool execution failed: ${result.error}`
+        : `Tool result: ${result.result}`
+        
       const resultMessage: Message = {
         id: generateId(),
         role: 'system',
-        content: createToolResultMessage(result.toolCallId, result.result, result.error),
+        content,
         timestamp: Date.now(),
       }
       addMessage(sessionId, resultMessage)
@@ -146,6 +217,7 @@ export function useChatWithTools(pluginManager: PluginManager) {
         role: 'user',
         content,
         timestamp: Date.now(),
+        metadata: {}
       }
       addMessage(session.id, userMessage)
     } else {
@@ -162,39 +234,149 @@ export function useChatWithTools(pluginManager: PluginManager) {
     setIsGenerating(true)
 
     try {
+      // Configure AutoSearchManager with current state
+      autoSearchManager.current.configure({ enabled: autoSearchEnabled })
+
+      // Check if auto-search should be triggered
+      let enhancedContent = content
+      let searchContext: SearchContext | null = null
+
+      if (autoSearchEnabled) {
+        const shouldSearch = await autoSearchManager.current.shouldSearch(
+          content,
+          session.messages
+        )
+
+        if (shouldSearch) {
+          console.log('Auto-search triggered for query:', content)
+          
+          // Add "Searching..." system message
+          const searchingMessage: Message = {
+            id: generateId(),
+            role: 'system',
+            content: '🔍 Searching the web...',
+            timestamp: Date.now(),
+            status: 'searching'
+          }
+          addMessage(session.id, searchingMessage)
+          
+          const searchStartTime = Date.now()
+          
+          // Perform search
+          searchContext = await autoSearchManager.current.performSearch(content)
+          
+          const searchTime = Date.now() - searchStartTime
+          
+          // Remove the searching message after completion
+          if (searchContext) {
+            // Remove the searching message from sessions
+            setSessions(prev =>
+              prev.map(s =>
+                s.id === session.id
+                  ? {
+                      ...s,
+                      messages: s.messages.filter(m => m.id !== searchingMessage.id)
+                    }
+                  : s
+              )
+            )
+            
+            // Also remove from current session
+            setCurrentSession(prev => {
+              if (prev?.id === session.id) {
+                return {
+                  ...prev,
+                  messages: prev.messages.filter(m => m.id !== searchingMessage.id)
+                }
+              }
+              return prev
+            })
+            
+            // Inject context into user message (lazy-loaded formatter)
+            enhancedContent = await autoSearchManager.current.injectContext(content, searchContext)
+          
+            // Store search metadata for use in callbacks
+            const searchMetadata = {
+              triggered: true,
+              query: searchContext.query,
+              sources: searchContext.sources,
+              chunkCount: searchContext.chunks.length,
+              searchTime
+            }
+            
+            // Update user message with autoSearch metadata
+            setSessions(prev =>
+              prev.map(s =>
+                s.id === session.id
+                  ? {
+                      ...s,
+                      messages: s.messages.map(m =>
+                        m.id === userMessage.id
+                          ? {
+                              ...m,
+                              metadata: {
+                                ...m.metadata,
+                                autoSearch: searchMetadata
+                              }
+                            }
+                          : m
+                      )
+                    }
+                  : s
+              )
+            )
+            
+            // Also update current session
+            setCurrentSession(prev => {
+              if (prev?.id === session.id) {
+                return {
+                  ...prev,
+                  messages: prev.messages.map(m =>
+                    m.id === userMessage.id
+                      ? {
+                          ...m,
+                          metadata: {
+                            ...m.metadata,
+                            autoSearch: searchMetadata
+                          }
+                        }
+                      : m
+                  )
+                }
+              }
+              return prev
+            })
+            
+            console.log('Auto-search completed:', {
+              sources: searchContext.sources.length,
+              chunks: searchContext.chunks.length,
+              searchTime
+            })
+          }
+        }
+      }
+
       const provider = ProviderFactory.createProvider(providerConfig)
       
-      // Get available tools if web search is enabled
-      const availableTools = webSearchEnabled ? toolExecutor.current.getAvailableTools() : []
+      // Build messages
+      // Exclude the current user message from previous messages (we'll add it with enhanced content)
+      const previousMessages = session.messages.filter(m => m.id !== userMessage.id)
       
-      // Build messages with system prompt
-      const previousMessages = session.messages.filter(m => m.id !== userMessage.id || hasUserMessage)
+      let messages: Array<{ role: "user" | "assistant" | "system"; content: string }> = previousMessages.map(m => ({
+        role: m.role as "user" | "assistant" | "system",
+        content: m.content,
+      }))
       
-      let messages: Array<{ role: "user" | "assistant" | "system"; content: string }> = []
+      // Always add current user message with enhanced content (if search was performed, it contains web context)
+      console.log('[useChatWithTools] Adding user message')
+      console.log('[useChatWithTools] Enhanced content length:', enhancedContent.length)
+      console.log('[useChatWithTools] Enhanced content preview:', enhancedContent.substring(0, 500))
+      console.log('[useChatWithTools] Search was performed:', searchContext !== null)
       
-      // Add system prompt with tools if enabled
-      if (availableTools.length > 0) {
-        messages.push({
-          role: 'system',
-          content: generateSystemPrompt(availableTools),
-        })
-      }
-      
-      // Add conversation history
-      messages = messages.concat(
-        previousMessages.map(m => ({
-          role: m.role as "user" | "assistant" | "system",
-          content: m.content,
-        }))
-      )
-      
-      // Add current user message if not already included
-      if (!hasUserMessage) {
-        messages.push({
-          role: userMessage.role,
-          content: userMessage.content,
-        })
-      }
+      messages.push({
+        role: userMessage.role,
+        content: enhancedContent,
+      })
 
       // First AI response
       const assistantMessage: Message = {
@@ -227,6 +409,10 @@ export function useChatWithTools(pluginManager: PluginManager) {
         setTimeout(processQueue, delay)
       }
       
+      console.log('[useChatWithTools] Sending messages to provider:', messages.length, 'messages')
+      console.log('[useChatWithTools] Last message content length:', messages[messages.length - 1]?.content.length)
+      console.log('[useChatWithTools] Last message preview:', messages[messages.length - 1]?.content.substring(0, 300))
+      
       await provider.sendMessage(
         {
           model,
@@ -250,78 +436,6 @@ export function useChatWithTools(pluginManager: PluginManager) {
       }
       
       updateMessage(session.id, assistantMessage.id, streamingContentRef.current)
-
-      // Check if response contains tool calls
-      const toolCalls = parseToolCalls(streamingContentRef.current)
-      
-      if (toolCalls && toolCalls.length > 0 && webSearchEnabled) {
-        console.log('Tool calls detected:', toolCalls)
-        
-        // Execute tool calls
-        await executeToolCalls(toolCalls, session.id)
-        
-        // Get updated session with tool results
-        const updatedSession = sessions.find(s => s.id === session.id) || session
-        
-        // Build new messages array with tool results
-        const messagesWithResults = updatedSession.messages.map(m => ({
-          role: m.role as "user" | "assistant" | "system",
-          content: m.content,
-        }))
-        
-        // Second AI response with tool results
-        const finalMessage: Message = {
-          id: generateId(),
-          role: 'assistant',
-          content: '',
-          timestamp: Date.now(),
-        }
-        
-        addMessage(session.id, finalMessage)
-        
-        streamingContentRef.current = ''
-        const finalQueue: string[] = []
-        let isFinalProcessing = false
-        let finalComplete = false
-        
-        const processFinalQueue = () => {
-          if (finalQueue.length === 0) {
-            isFinalProcessing = false
-            return
-          }
-          
-          isFinalProcessing = true
-          const chunk = finalQueue.shift()!
-          streamingContentRef.current += chunk
-          updateMessage(session.id, finalMessage.id, streamingContentRef.current)
-          
-          let delay = finalComplete && finalQueue.length > 20 ? 5 : 20
-          setTimeout(processFinalQueue, delay)
-        }
-        
-        await provider.sendMessage(
-          {
-            model,
-            messages: messagesWithResults,
-            stream: true,
-            temperature: 0.7,
-          },
-          (chunk) => {
-            finalQueue.push(chunk)
-            if (!isFinalProcessing) {
-              processFinalQueue()
-            }
-          }
-        )
-        
-        finalComplete = true
-        
-        while (finalQueue.length > 0 || isFinalProcessing) {
-          await new Promise(resolve => setTimeout(resolve, 10))
-        }
-        
-        updateMessage(session.id, finalMessage.id, streamingContentRef.current)
-      }
       
     } catch (error) {
       console.error('Failed to send message:', error)
@@ -335,7 +449,7 @@ export function useChatWithTools(pluginManager: PluginManager) {
     } finally {
       setIsGenerating(false)
     }
-  }, [currentSession, addMessage, updateMessage, updateSessionTitle, webSearchEnabled, executeToolCalls, sessions])
+  }, [currentSession, addMessage, updateMessage, updateSessionTitle, executeToolCalls, autoSearchEnabled])
 
   const deleteSession = useCallback((sessionId: string) => {
     setSessions(prev => prev.filter(s => s.id !== sessionId))
@@ -349,8 +463,10 @@ export function useChatWithTools(pluginManager: PluginManager) {
     currentSession,
     setCurrentSession,
     isGenerating,
-    webSearchEnabled,
-    setWebSearchEnabled,
+    autoSearchEnabled,
+    setAutoSearchEnabled,
+    webSearchSettings,
+    updateWebSearchSettings,
     createSession,
     sendMessage,
     deleteSession,

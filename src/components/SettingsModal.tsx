@@ -1,13 +1,14 @@
 import { useState } from 'react'
-import { X, Settings as SettingsIcon, Plug, ChevronDown, ChevronRight } from 'lucide-react'
+import { X, Settings as SettingsIcon, Plug, ChevronDown, ChevronRight, Search } from 'lucide-react'
 import { Button } from './ui/Button'
 import { PluginCard } from './PluginCard'
 import type { ProviderConfig, ModelInfo } from '../types'
 import type { BasePlugin } from '../plugins/core'
 import { cn } from '../lib/utils'
 
-// Import the old Settings content
+// Import the Settings components
 import { Settings as SettingsContent } from './Settings'
+import { WebSearchSettings, type WebSearchSettings as WebSearchSettingsType } from './WebSearchSettings'
 
 interface SettingsModalProps {
   // Settings props
@@ -16,11 +17,13 @@ interface SettingsModalProps {
   models: ModelInfo[]
   selectedModel: string
   isLoadingModels: boolean
+  webSearchSettings?: WebSearchSettingsType
   onSelectProvider: (provider: ProviderConfig) => void
   onSelectModel: (model: string) => void
   onUpdateProvider: (provider: ProviderConfig) => void
   onTestProvider: (provider: ProviderConfig) => Promise<boolean>
   onLoadModels: (provider: ProviderConfig) => void
+  onUpdateWebSearchSettings?: (settings: WebSearchSettingsType) => void
   
   // Plugin props
   plugins: BasePlugin[]
@@ -31,7 +34,7 @@ interface SettingsModalProps {
   onClose: () => void
 }
 
-type Tab = 'settings' | 'plugins'
+type Tab = 'settings' | 'websearch' | 'plugins'
 
 export function SettingsModal({
   providers,
@@ -39,11 +42,13 @@ export function SettingsModal({
   models,
   selectedModel,
   isLoadingModels,
+  webSearchSettings,
   onSelectProvider,
   onSelectModel,
   onUpdateProvider,
   onTestProvider,
   onLoadModels,
+  onUpdateWebSearchSettings,
   plugins,
   onEnablePlugin,
   onDisablePlugin,
@@ -55,6 +60,7 @@ export function SettingsModal({
 
   const tabs = [
     { id: 'settings' as Tab, label: 'Settings', icon: SettingsIcon },
+    { id: 'websearch' as Tab, label: 'Web Search', icon: Search },
     { id: 'plugins' as Tab, label: 'Plugins', icon: Plug }
   ]
 
@@ -117,6 +123,15 @@ export function SettingsModal({
                   onUpdateProvider={onUpdateProvider}
                   onTestProvider={onTestProvider}
                   onLoadModels={onLoadModels}
+                />
+              </div>
+            )}
+
+            {activeTab === 'websearch' && (
+              <div className="p-6">
+                <WebSearchSettings
+                  settings={webSearchSettings}
+                  onUpdateSettings={onUpdateWebSearchSettings}
                 />
               </div>
             )}

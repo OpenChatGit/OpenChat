@@ -2,7 +2,6 @@ import { useState, useEffect, useMemo } from 'react'
 import { PluginManager } from '../plugins/core/PluginManager'
 import { MarkdownRendererPlugin } from '../plugins/builtin/markdown-renderer'
 import { MessageExportPlugin } from '../plugins/builtin/MessageExportPlugin'
-import { WebSearchToolPlugin } from '../plugins/builtin/web-search/plugin'
 import type { BasePlugin, AppContext } from '../plugins/core'
 
 export function usePlugins() {
@@ -33,9 +32,6 @@ export function usePlugins() {
 
         // Register OPTIONAL plugins (can be enabled/disabled by user)
         await pluginManager.register(new MessageExportPlugin())
-
-        // Register GLOBAL TOOLS (available to all users)
-        await pluginManager.register(new WebSearchToolPlugin())
 
         // Load saved plugin state
         pluginManager.loadPluginState()

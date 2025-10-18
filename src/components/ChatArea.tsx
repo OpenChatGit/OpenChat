@@ -18,8 +18,8 @@ interface ChatAreaProps {
   onSelectModel: (model: string) => void
   onLoadModels: (provider: ProviderConfig) => void
   isLoadingModels?: boolean
-  webSearchEnabled?: boolean
-  onToggleWebSearch?: () => void
+  autoSearchEnabled?: boolean
+  onToggleAutoSearch?: () => void
 }
 
 export function ChatArea({ 
@@ -36,8 +36,8 @@ export function ChatArea({
   onSelectModel,
   onLoadModels,
   isLoadingModels = false,
-  webSearchEnabled = false,
-  onToggleWebSearch = () => {}
+  autoSearchEnabled = false,
+  onToggleAutoSearch = () => {}
 }: ChatAreaProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
@@ -70,8 +70,8 @@ export function ChatArea({
             onSelectProvider={onSelectProvider}
             onSelectModel={onSelectModel}
             onLoadModels={onLoadModels}
-            webSearchEnabled={webSearchEnabled}
-            onToggleWebSearch={onToggleWebSearch}
+            autoSearchEnabled={autoSearchEnabled}
+            onToggleAutoSearch={onToggleAutoSearch}
           />
         </div>
       </div>
@@ -86,13 +86,25 @@ export function ChatArea({
           <div className="flex-1"></div>
         ) : (
           <div>
-            {session.messages.map((message) => (
-              <ChatMessage 
-                key={message.id} 
-                message={message} 
-                rendererPlugins={rendererPlugins}
-              />
-            ))}
+            {session.messages.map((message, index) => {
+              // Get previous message for autoSearch metadata
+              const previousMessage = index > 0 ? session.messages[index - 1] : undefined
+              
+              // Show system messages only if they have a status (like 'searching')
+              const shouldShowMessage = message.role !== 'system' || message.status === 'searching'
+              
+              return (
+                <div key={message.id}>
+                  {shouldShowMessage && (
+                    <ChatMessage 
+                      message={message} 
+                      rendererPlugins={rendererPlugins}
+                      previousMessage={previousMessage}
+                    />
+                  )}
+                </div>
+              )
+            })}
             <div ref={messagesEndRef} />
           </div>
         )}
@@ -110,9 +122,9 @@ export function ChatArea({
         onSelectProvider={onSelectProvider}
         onSelectModel={onSelectModel}
         onLoadModels={onLoadModels}
-            isLoadingModels={isLoadingModels}
-        webSearchEnabled={webSearchEnabled}
-        onToggleWebSearch={onToggleWebSearch}
+        isLoadingModels={isLoadingModels}
+        autoSearchEnabled={autoSearchEnabled}
+        onToggleAutoSearch={onToggleAutoSearch}
       />
     </div>
   )

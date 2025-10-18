@@ -4,6 +4,8 @@ import { BaseProvider } from './base'
 import { OllamaProvider } from './ollama'
 import { LMStudioProvider } from './lmstudio'
 import { LlamaCppProvider } from './llamacpp'
+import { OpenAIProvider } from './openai'
+import { AnthropicProvider } from './anthropic'
 
 export class ProviderFactory {
   static createProvider(config: ProviderConfig): BaseProvider {
@@ -14,6 +16,10 @@ export class ProviderFactory {
         return new LMStudioProvider(config)
       case 'llamacpp':
         return new LlamaCppProvider(config)
+      case 'openai':
+        return new OpenAIProvider(config)
+      case 'anthropic':
+        return new AnthropicProvider(config)
       default:
         throw new Error(`Unsupported provider type: ${config.type}`)
     }
