@@ -5,8 +5,13 @@
 ![Version](https://img.shields.io/badge/version-0.4.6%20(test)-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
+![Free Forever](https://img.shields.io/badge/free-forever-brightgreen)
 
 OpenChat is a modular, cross-platform LLM chat application built with Tauri, React, and TypeScript. It delivers a ChatGPT-style interface that connects seamlessly to local AI providers such as Ollama, LM Studio, and llama.cpp.
+
+> 💚 **Free Forever Promise:** OpenChat will always remain 100% free and open source. No paid features, no subscriptions, no paywalls - ever. All features are custom-built and freely available to everyone. We accept donations to support development, but every feature will always be accessible to all users at no cost.
+
+> ⚖️ **Copyright Notice:** This project is protected under German copyright law (Urheberrecht). While OpenChat is free and open source under the MIT License, all rights to the original work remain with the author. The MIT License grants you permission to use, modify, and distribute this software, but does not transfer copyright ownership.
 
 > ⚠️ **Notice:** Experimental features have been integrated into the main branch as best as possible. Some features may still be in development or require additional testing. Please report any issues you encounter.
 

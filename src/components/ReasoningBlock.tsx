@@ -12,7 +12,7 @@ export function ReasoningBlock({ content, isComplete = false }: ReasoningBlockPr
   const [copied, setCopied] = useState(false)
 
   return (
-    <div className="mb-4">
+    <div className="mb-2">
       {/* Header row: toggle on the left, copy button on the right when expanded */}
       <div className="flex items-center justify-between">
         <button
@@ -50,10 +50,11 @@ export function ReasoningBlock({ content, isComplete = false }: ReasoningBlockPr
       {/* Reasoning Content */}
       {isExpanded && (
         <div 
-          className="mt-2 text-sm whitespace-pre-wrap break-words rounded-lg p-3"
+          className="mt-2 text-sm whitespace-pre-wrap break-words rounded-lg p-3 overflow-y-auto"
           style={{ 
             backgroundColor: 'rgba(255, 255, 255, 0.03)',
-            color: '#9CA3AF'
+            color: '#9CA3AF',
+            maxHeight: '300px'
           }}
         >
           {content}

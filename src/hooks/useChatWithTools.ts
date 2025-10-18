@@ -13,8 +13,28 @@ import type { WebSearchSettings } from '../components/WebSearchSettings'
 import { loadWebSearchSettings, saveWebSearchSettings } from '../lib/web-search/settingsStorage'
 
 export function useChatWithTools(pluginManager: PluginManager) {
-  const [sessions, setSessions] = useState<ChatSession[]>([])
-  const [currentSession, setCurrentSession] = useState<ChatSession | null>(null)
+  // Load sessions from localStorage on initial mount
+  const [sessions, setSessions] = useState<ChatSession[]>(() => {
+    try {
+      const saved = localStorage.getItem('chat-sessions')
+      return saved ? JSON.parse(saved) : []
+    } catch (error) {
+      console.error('Failed to load sessions from localStorage:', error)
+      return []
+    }
+  })
+  
+  // Load current session from localStorage on initial mount
+  const [currentSession, setCurrentSession] = useState<ChatSession | null>(() => {
+    try {
+      const saved = localStorage.getItem('current-session')
+      return saved ? JSON.parse(saved) : null
+    } catch (error) {
+      console.error('Failed to load current session from localStorage:', error)
+      return null
+    }
+  })
+  
   const [isGenerating, setIsGenerating] = useState(false)
   const [autoSearchEnabled, setAutoSearchEnabled] = useState(false)
   const [webSearchSettings, setWebSearchSettings] = useState<WebSearchSettings | null>(null)
@@ -22,6 +42,28 @@ export function useChatWithTools(pluginManager: PluginManager) {
   const toolExecutor = useRef(new ToolExecutor(pluginManager))
   const autoSearchManager = useRef(new AutoSearchManager())
   const settingsInitialized = useRef(false)
+
+  // Save sessions to localStorage whenever they change
+  useEffect(() => {
+    try {
+      localStorage.setItem('chat-sessions', JSON.stringify(sessions))
+    } catch (error) {
+      console.error('Failed to save sessions to localStorage:', error)
+    }
+  }, [sessions])
+
+  // Save current session to localStorage whenever it changes
+  useEffect(() => {
+    try {
+      if (currentSession) {
+        localStorage.setItem('current-session', JSON.stringify(currentSession))
+      } else {
+        localStorage.removeItem('current-session')
+      }
+    } catch (error) {
+      console.error('Failed to save current session to localStorage:', error)
+    }
+  }, [currentSession])
 
   // Load settings on mount and apply to AutoSearchManager
   useEffect(() => {
