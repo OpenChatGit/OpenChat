@@ -11,6 +11,7 @@ import { AutoSearchManager } from '../lib/web-search/autoSearchManager'
 import type { SearchContext } from '../lib/web-search/types'
 import type { WebSearchSettings } from '../components/WebSearchSettings'
 import { loadWebSearchSettings, saveWebSearchSettings } from '../lib/web-search/settingsStorage'
+import { Tokenizer } from '../lib/tokenizer'
 
 export function useChatWithTools(pluginManager: PluginManager) {
   // Load sessions from localStorage on initial mount
@@ -673,7 +674,12 @@ Format: {title}Your Title Here{/title}`
       let enhancedContent = content
       let searchContext: SearchContext | null = null
 
-      if (autoSearchEnabled) {
+      // Disable auto-search when images are attached to avoid conflicts
+      // Images typically require visual analysis, not web search
+      const hasImages = images && images.length > 0
+      const shouldSkipSearch = hasImages
+
+      if (autoSearchEnabled && !shouldSkipSearch) {
         const shouldSearch = await autoSearchManager.current.shouldSearch(
           content,
           session.messages
@@ -871,6 +877,76 @@ Format: {title}Your Title Here{/title}`
       }
       
       updateMessage(session.id, assistantMessage.id, streamingContentRef.current)
+      
+      // Calculate token usage after streaming completes
+      try {
+        // Include the assistant's response in the token calculation
+        const messagesWithResponse = [
+          ...messages,
+          {
+            role: 'assistant' as const,
+            content: streamingContentRef.current
+          }
+        ]
+        
+        const tokenUsage = Tokenizer.countMessageTokens(
+          messagesWithResponse,
+          model,
+          providerConfig.type
+        )
+        
+        // Update assistant message with token usage metadata
+        setSessions(prev =>
+          prev.map(s =>
+            s.id === session.id
+              ? {
+                  ...s,
+                  messages: s.messages.map(m =>
+                    m.id === assistantMessage.id
+                      ? {
+                          ...m,
+                          metadata: {
+                            ...m.metadata,
+                            tokenUsage,
+                            model,
+                            provider: providerConfig.type
+                          }
+                        }
+                      : m
+                  )
+                }
+              : s
+          )
+        )
+        
+        // Also update current session
+        setCurrentSession(prev => {
+          if (prev?.id === session.id) {
+            return {
+              ...prev,
+              messages: prev.messages.map(m =>
+                m.id === assistantMessage.id
+                  ? {
+                      ...m,
+                      metadata: {
+                        ...m.metadata,
+                        tokenUsage,
+                        model,
+                        provider: providerConfig.type
+                      }
+                    }
+                  : m
+              )
+            }
+          }
+          return prev
+        })
+        
+        console.log('[Token Usage] Calculated tokens:', tokenUsage)
+      } catch (error) {
+        console.warn('[Token Usage] Failed to calculate token usage:', error)
+        // Gracefully handle error - token usage will remain undefined
+      }
       
     } catch (error) {
       console.error('Failed to send message:', error)

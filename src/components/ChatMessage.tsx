@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import type { Message, ImageAttachment } from '../types'
 import type { RendererPlugin } from '../plugins/core'
 import { ReasoningBlock } from './ReasoningBlock'
+import { TokenUsageDropdown } from './TokenUsageDropdown'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faCheck, faTimes } from '@fortawesome/free-solid-svg-icons'
 import contentCopyIcon from '../assets/content_copy.svg'
@@ -19,6 +20,7 @@ export function ChatMessage({ message, rendererPlugins = [], previousMessage }: 
   const [isCopied, setIsCopied] = useState(false)
   const [lightboxImage, setLightboxImage] = useState<ImageAttachment | null>(null)
   const [imageLoadStates, setImageLoadStates] = useState<Record<string, 'loading' | 'loaded' | 'error'>>({})
+  const [isTokenDropdownOpen, setIsTokenDropdownOpen] = useState(false)
   
   // Debounce content rendering during streaming
   const [debouncedContent, setDebouncedContent] = useState(message.content)
@@ -460,6 +462,7 @@ export function ChatMessage({ message, rendererPlugins = [], previousMessage }: 
             
             {/* Info Button */}
             <button
+              onClick={() => setIsTokenDropdownOpen(!isTokenDropdownOpen)}
               className="p-1.5 rounded hover:bg-white/10 transition-colors"
               title="Info"
             >
@@ -474,6 +477,15 @@ export function ChatMessage({ message, rendererPlugins = [], previousMessage }: 
               <img src={refreshIcon} alt="Refresh" className="w-4 h-4" />
             </button>
           </div>
+        )}
+        
+        {/* Token Usage Dropdown */}
+        {message.metadata?.tokenUsage && (
+          <TokenUsageDropdown
+            tokenUsage={message.metadata.tokenUsage}
+            isOpen={isTokenDropdownOpen}
+            onToggle={() => setIsTokenDropdownOpen(!isTokenDropdownOpen)}
+          />
         )}
       </div>
     </div>

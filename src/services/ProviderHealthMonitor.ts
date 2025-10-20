@@ -339,7 +339,19 @@ export class ProviderHealthMonitor {
           })
         } catch (error) {
           // Isolate failures - one provider failure doesn't affect others
-          console.error(`Health check failed for ${provider.type}:`, error)
+          // Only log if it's an unexpected error (not connection refused/timeout)
+          const errorMsg = error instanceof Error ? error.message : String(error)
+          const isExpectedFailure = 
+            errorMsg.includes('not reachable') ||
+            errorMsg.includes('Failed to fetch') ||
+            errorMsg.includes('ERR_CONNECTION_REFUSED') ||
+            errorMsg.includes('ERR_FAILED') ||
+            errorMsg.includes('CORS') ||
+            errorMsg.includes('Network request failed')
+          
+          if (!isExpectedFailure) {
+            console.error(`Health check failed for ${provider.type}:`, error)
+          }
           
           // Mark provider as unhealthy
           this.statusCache.set(provider.type, {
@@ -438,7 +450,19 @@ export class ProviderHealthMonitor {
           })
         } catch (error) {
           // Isolate failures - one provider failure doesn't affect others
-          console.error(`Health check failed for ${provider.type}:`, error)
+          // Only log if it's an unexpected error (not connection refused/timeout)
+          const errorMsg = error instanceof Error ? error.message : String(error)
+          const isExpectedFailure = 
+            errorMsg.includes('not reachable') ||
+            errorMsg.includes('Failed to fetch') ||
+            errorMsg.includes('ERR_CONNECTION_REFUSED') ||
+            errorMsg.includes('ERR_FAILED') ||
+            errorMsg.includes('CORS') ||
+            errorMsg.includes('Network request failed')
+          
+          if (!isExpectedFailure) {
+            console.error(`Health check failed for ${provider.type}:`, error)
+          }
           
           // Mark provider as unhealthy
           this.statusCache.set(provider.type, {

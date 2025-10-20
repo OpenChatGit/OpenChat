@@ -13,6 +13,12 @@ export interface ImageAttachment {
   url?: string; // Optional: For displaying the image
 }
 
+export interface TokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+}
+
 export interface Message {
   id: string;
   role: 'user' | 'assistant' | 'system';
@@ -27,6 +33,7 @@ export interface Message {
     model?: string;
     provider?: string;
     tokensUsed?: number;
+    tokenUsage?: TokenUsage;
     renderTime?: number; // Track rendering performance
     autoSearch?: {
       triggered: boolean;
