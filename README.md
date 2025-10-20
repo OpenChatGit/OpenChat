@@ -2,7 +2,7 @@
 
 # OpenChat
 
-![Version](https://img.shields.io/badge/version-0.4.6%20(test)-blue)
+![Version](https://img.shields.io/badge/version-0.4.8-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 ![Free Forever](https://img.shields.io/badge/free-forever-brightgreen)

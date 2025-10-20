@@ -4,27 +4,33 @@ import { ProfileButton } from './ProfileButton'
 import type { ChatSession } from '../types'
 import { formatTimestamp } from '../lib/utils'
 import { cn } from '../lib/utils'
+import type { UpdateInfo } from '../services/updateChecker'
+import downloadIcon from '../assets/download.svg'
 
 interface SidebarProps {
   sessions: ChatSession[]
   currentSession: ChatSession | null
+  updateInfo: UpdateInfo | null
   onNewChat: () => void
   onSelectSession: (session: ChatSession) => void
   onDeleteSession: (sessionId: string) => void
   onRenameSession: (sessionId: string, newTitle: string) => void
   onOpenSettings: () => void
   onToggleSidebar: () => void
+  onOpenUpdate: () => void
 }
 
 export function Sidebar({
   sessions,
   currentSession,
+  updateInfo,
   onNewChat,
   onSelectSession,
   onDeleteSession,
   onRenameSession,
   onOpenSettings,
   onToggleSidebar,
+  onOpenUpdate,
 }: SidebarProps) {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null)
@@ -101,17 +107,32 @@ export function Sidebar({
     >
       {/* Header with Icon Buttons */}
       <div className="p-3 flex items-center justify-between">
-        {/* New Chat Button */}
-        <button
-          onClick={onNewChat}
-          className="p-2 rounded-lg hover:bg-white/10 transition-colors"
-          title="New Chat"
-          aria-label="New Chat"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 -960 960 960" width="20px" fill="currentColor">
-            <path d="M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h357l-80 80H200v560h560v-278l80-80v358q0 33-23.5 56.5T760-120H200Zm280-360ZM360-360v-170l367-367q12-12 27-18t30-6q16 0 30.5 6t26.5 18l56 57q11 12 17 26.5t6 29.5q0 15-5.5 29.5T897-728L530-360H360Zm481-424-56-56 56 56ZM440-440h56l232-232-28-28-29-28-231 231v57Zm260-260-29-28 29 28 28 28-28-28Z"/>
-          </svg>
-        </button>
+        <div className="flex items-center gap-2">
+          {/* New Chat Button */}
+          <button
+            onClick={onNewChat}
+            className="p-2 rounded-lg hover:bg-white/10 transition-colors"
+            title="New Chat"
+            aria-label="New Chat"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 -960 960 960" width="20px" fill="currentColor">
+              <path d="M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h357l-80 80H200v560h560v-278l80-80v358q0 33-23.5 56.5T760-120H200Zm280-360ZM360-360v-170l367-367q12-12 27-18t30-6q16 0 30.5 6t26.5 18l56 57q11 12 17 26.5t6 29.5q0 15-5.5 29.5T897-728L530-360H360Zm481-424-56-56 56 56ZM440-440h56l232-232-28-28-29-28-231 231v57Zm260-260-29-28 29 28 28 28-28-28Z"/>
+            </svg>
+          </button>
+
+          {/* Update Available Button */}
+          {updateInfo?.available && (
+            <button
+              onClick={onOpenUpdate}
+              className="p-2 rounded-lg hover:bg-white/10 transition-colors relative animate-pulse"
+              title={`Update available: v${updateInfo.latestVersion}`}
+              aria-label="Update available"
+            >
+              <img src={downloadIcon} alt="Download" className="w-5 h-5" />
+              <span className="absolute top-1 right-1 w-2 h-2 bg-green-500 rounded-full"></span>
+            </button>
+          )}
+        </div>
 
         {/* Sidebar Toggle Button */}
         <button

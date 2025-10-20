@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { X, Settings as SettingsIcon, Plug, ChevronDown, ChevronRight, Search } from 'lucide-react'
+import { X, Settings as SettingsIcon, Plug, ChevronDown, ChevronRight, Search, FolderOpen } from 'lucide-react'
 import { Button } from './ui/Button'
 import { PluginCard } from './PluginCard'
 import type { ProviderConfig, ModelInfo } from '../types'
 import type { BasePlugin } from '../plugins/core'
+import { openPluginsDirectory } from '../services/externalPluginLoader'
 import { cn } from '../lib/utils'
 
 // Import the Settings components
@@ -200,14 +201,26 @@ export function SettingsModal({
                   </button>
                   {externalExpanded && (
                     <>
+                      {/* Open Plugins Folder Button */}
+                      <div className="flex justify-end mb-4">
+                        <button
+                          onClick={() => openPluginsDirectory()}
+                          className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-white/10 transition-colors text-sm"
+                          style={{ color: 'var(--color-foreground)' }}
+                        >
+                          <FolderOpen className="w-4 h-4" />
+                          Open Plugins Folder
+                        </button>
+                      </div>
+
                       {externalPlugins.length === 0 ? (
                         <div className="text-center py-12 border border-dashed border-border rounded-lg">
                           <Plug className="w-12 h-12 mx-auto mb-3 text-muted-foreground" />
                           <p className="text-sm text-muted-foreground mb-2">
                             No external plugins installed
                           </p>
-                          <p className="text-xs text-muted-foreground">
-                            Install plugins from the community to extend functionality
+                          <p className="text-xs text-muted-foreground mb-4">
+                            Click "Open Plugins Folder" above to add custom plugins
                           </p>
                         </div>
                       ) : (

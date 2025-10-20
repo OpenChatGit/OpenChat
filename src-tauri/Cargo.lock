@@ -2667,7 +2667,7 @@ dependencies = [
 
 [[package]]
 name = "openchat"
-version = "0.4.6"
+version = "0.4.8"
 dependencies = [
  "chrono",
  "futures",
@@ -2677,6 +2677,7 @@ dependencies = [
  "serde_json",
  "tauri",
  "tauri-build",
+ "tauri-plugin-fs",
  "tauri-plugin-http",
  "tauri-plugin-opener",
  "tokio",

@@ -1,0 +1,10 @@
+{
+  "id": "example-uppercase",
+  "name": "Uppercase Example",
+  "version": "1.0.0",
+  "description": "Example plugin that converts messages to uppercase",
+  "author": "OpenChat Team",
+  "type": "message-processor",
+  "appVersion": ">=0.4.0",
+  "enabled": false
+}

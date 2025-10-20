@@ -2,15 +2,18 @@ import { useState, useEffect } from 'react'
 import { Sidebar } from './components/Sidebar'
 import { ChatArea } from './components/ChatArea'
 import { SettingsModal } from './components/SettingsModal'
+import { UpdateModal } from './components/UpdateModal'
 import { useChatWithTools } from './hooks/useChatWithTools'
 import { useProviders } from './hooks/useProviders'
 import { usePlugins } from './hooks/usePlugins'
+import { useUpdateChecker } from './hooks/useUpdateChecker'
 import { ProviderHealthMonitor } from './services/ProviderHealthMonitor'
 import type { RendererPlugin } from './plugins/core'
 import type { ImageAttachment } from './types'
 
 function App() {
   const [showSettings, setShowSettings] = useState(false)
+  const [showUpdateModal, setShowUpdateModal] = useState(false)
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
   
   const { 
@@ -19,6 +22,8 @@ function App() {
     enablePlugin, 
     disablePlugin 
   } = usePlugins()
+
+  const { updateInfo } = useUpdateChecker()
   
   const {
     sessions,
@@ -118,12 +123,14 @@ function App() {
         <Sidebar
           sessions={sessions}
           currentSession={currentSession}
+          updateInfo={updateInfo}
           onNewChat={handleNewChat}
           onSelectSession={setCurrentSession}
           onDeleteSession={deleteSession}
           onRenameSession={updateSessionTitle}
           onOpenSettings={() => setShowSettings(true)}
           onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+          onOpenUpdate={() => setShowUpdateModal(true)}
         />
       </div>
 
@@ -182,6 +189,14 @@ function App() {
           plugins={plugins}
           onEnablePlugin={enablePlugin}
           onDisablePlugin={disablePlugin}
+        />
+      )}
+
+      {/* Update Modal */}
+      {showUpdateModal && updateInfo?.available && (
+        <UpdateModal
+          updateInfo={updateInfo}
+          onClose={() => setShowUpdateModal(false)}
         />
       )}
     </div>

@@ -103,8 +103,31 @@ Function ChromeDetectionPageLeave
   ${EndIf}
 FunctionEnd
 
+; Create plugins directory and copy bundled plugins
+Function SetupPlugins
+  DetailPrint "Setting up plugins directory..."
+  
+  ; Create plugins directory in installation folder
+  CreateDirectory "$INSTDIR\plugins"
+  CreateDirectory "$INSTDIR\plugins\external"
+  
+  ; Copy bundled plugins if they exist
+  ${If} ${FileExists} "$INSTDIR\resources\plugins\*.*"
+    DetailPrint "Copying bundled plugins..."
+    CopyFiles /SILENT "$INSTDIR\resources\plugins\*.*" "$INSTDIR\plugins\"
+  ${EndIf}
+  
+  DetailPrint "Plugins directory setup complete"
+FunctionEnd
+
 ; Hook into Tauri's installer
 !macro customInstall
   ; Add custom page before installation
   !insertmacro MUI_PAGE_CUSTOM ChromeDetectionPage ChromeDetectionPageLeave
+!macroend
+
+; Hook after installation
+!macro customInstallMode
+  ; Setup plugins after files are copied
+  Call SetupPlugins
 !macroend

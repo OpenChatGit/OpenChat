@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { PluginManager } from '../plugins/core/PluginManager'
 import { MarkdownRendererPlugin } from '../plugins/builtin/markdown-renderer'
 import { MessageExportPlugin } from '../plugins/builtin/MessageExportPlugin'
+import { ensurePluginsDirectory } from '../services/externalPluginLoader'
 import type { BasePlugin, AppContext } from '../plugins/core'
 
 export function usePlugins() {
@@ -27,6 +28,9 @@ export function usePlugins() {
   useEffect(() => {
     const initPlugins = async () => {
       try {
+        // Ensure external plugins directory exists
+        await ensurePluginsDirectory()
+
         // Register CORE plugins (always enabled, cannot be disabled)
         await pluginManager.register(new MarkdownRendererPlugin())
 
