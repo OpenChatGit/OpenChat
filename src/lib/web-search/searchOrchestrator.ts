@@ -57,7 +57,7 @@ export class SearchOrchestrator {
   private cache: Map<string, CacheEntry>;
   private cacheAccessOrder: string[]; // For LRU eviction
   private currentCacheSize: number;   // Current cache size in bytes
-  private cleanupTimer: NodeJS.Timeout | null = null;
+  private cleanupTimer: ReturnType<typeof setTimeout> | null = null;
   
   // Statistics
   private stats: SearchStats;

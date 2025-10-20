@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react'
-import type { Message } from '../types'
+import type { Message, ImageAttachment } from '../types'
 import type { RendererPlugin } from '../plugins/core'
 import { ReasoningBlock } from './ReasoningBlock'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faCheck } from '@fortawesome/free-solid-svg-icons'
+import { faCheck, faTimes } from '@fortawesome/free-solid-svg-icons'
+import contentCopyIcon from '../assets/content_copy.svg'
+import infoIcon from '../assets/info_icon.svg'
+import refreshIcon from '../assets/refresh.svg'
 
 interface ChatMessageProps {
   message: Message
@@ -14,6 +17,8 @@ interface ChatMessageProps {
 export function ChatMessage({ message, rendererPlugins = [], previousMessage }: ChatMessageProps) {
   const isUser = message.role === 'user'
   const [isCopied, setIsCopied] = useState(false)
+  const [lightboxImage, setLightboxImage] = useState<ImageAttachment | null>(null)
+  const [imageLoadStates, setImageLoadStates] = useState<Record<string, 'loading' | 'loaded' | 'error'>>({})
   
   // Debounce content rendering during streaming
   const [debouncedContent, setDebouncedContent] = useState(message.content)
@@ -109,21 +114,183 @@ export function ChatMessage({ message, rendererPlugins = [], previousMessage }: 
     return parts.length > 0 ? parts : []
   }
 
-  if (isUser) {
-    // User message - right aligned with gray bubble
+  // Handle image loading states
+  const handleImageLoad = (imageId: string) => {
+    setImageLoadStates(prev => ({ ...prev, [imageId]: 'loaded' }))
+  }
+
+  const handleImageError = (imageId: string) => {
+    setImageLoadStates(prev => ({ ...prev, [imageId]: 'error' }))
+  }
+
+  // Initialize loading state for images
+  useEffect(() => {
+    if (message.images) {
+      const initialStates: Record<string, 'loading' | 'loaded' | 'error'> = {}
+      message.images.forEach(img => {
+        if (!imageLoadStates[img.id]) {
+          initialStates[img.id] = 'loading'
+        }
+      })
+      if (Object.keys(initialStates).length > 0) {
+        setImageLoadStates(prev => ({ ...prev, ...initialStates }))
+      }
+    }
+  }, [message.images])
+
+  // Handle Escape key to close lightbox
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && lightboxImage) {
+        setLightboxImage(null)
+      }
+    }
+
+    if (lightboxImage) {
+      document.addEventListener('keydown', handleEscape)
+      // Trap focus in lightbox
+      document.body.style.overflow = 'hidden'
+    }
+
+    return () => {
+      document.removeEventListener('keydown', handleEscape)
+      document.body.style.overflow = ''
+    }
+  }, [lightboxImage])
+
+  // Render images in a responsive grid
+  const renderImages = (images: ImageAttachment[]) => {
+    if (!images || images.length === 0) return null
+
     return (
-      <div className="px-4 py-3">
-        <div className="max-w-3xl mx-auto flex justify-end">
-          <div 
-            className="max-w-[70%] rounded-3xl px-5 py-3"
-            style={{ backgroundColor: '#2F2F2F' }}
-          >
-            <div className="text-sm whitespace-pre-wrap break-words" style={{ color: 'var(--color-foreground)' }}>
-              {message.content}
+      <div 
+        className={`grid gap-2 mb-3 ${
+          images.length === 1 ? 'grid-cols-1' : 
+          images.length === 2 ? 'grid-cols-2' : 
+          images.length === 3 ? 'grid-cols-3' : 
+          'grid-cols-2 sm:grid-cols-3'
+        }`}
+        role="list"
+        aria-label={`${images.length} image(s) in message`}
+      >
+        {images.map((image) => {
+          const loadState = imageLoadStates[image.id] || 'loading'
+          const imageUrl = image.url || `data:${image.mimeType};base64,${image.data}`
+
+          return (
+            <div
+              key={image.id}
+              className="relative rounded-lg overflow-hidden bg-gray-800 cursor-pointer hover:opacity-90 transition-opacity focus-within:ring-2 focus-within:ring-white"
+              style={{ 
+                width: images.length === 1 ? '200px' : '120px',
+                height: images.length === 1 ? '200px' : '120px'
+              }}
+              role="listitem"
+            >
+              <button
+                onClick={() => setLightboxImage(image)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    setLightboxImage(image)
+                  }
+                }}
+                className="w-full h-full focus:outline-none"
+                aria-label={`View full size image: ${image.fileName}`}
+              >
+                {loadState === 'loading' && (
+                  <div className="absolute inset-0 flex items-center justify-center" aria-label="Loading image">
+                    <svg className="w-8 h-8 animate-spin text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                  </div>
+                )}
+                {loadState === 'error' && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400 text-sm" role="alert">
+                    <svg className="w-8 h-8 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span>Failed to load</span>
+                  </div>
+                )}
+                <img
+                  src={imageUrl}
+                  alt={`${image.fileName}${image.width && image.height ? `, ${image.width} by ${image.height} pixels` : ''}`}
+                  className={`w-full h-full object-cover ${loadState === 'loaded' ? 'opacity-100' : 'opacity-0'}`}
+                  onLoad={() => handleImageLoad(image.id)}
+                  onError={() => handleImageError(image.id)}
+                  loading="lazy"
+                />
+              </button>
             </div>
+          )
+        })}
+      </div>
+    )
+  }
+
+  // Lightbox modal for full-size image view
+  const renderLightbox = () => {
+    if (!lightboxImage) return null
+
+    const imageUrl = lightboxImage.url || `data:${lightboxImage.mimeType};base64,${lightboxImage.data}`
+
+    return (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4"
+        onClick={() => setLightboxImage(null)}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Image viewer"
+      >
+        <button
+          className="absolute top-4 right-4 p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors focus:outline-none focus:ring-2 focus:ring-white"
+          onClick={() => setLightboxImage(null)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              setLightboxImage(null)
+            }
+          }}
+          aria-label="Close image viewer"
+        >
+          <FontAwesomeIcon icon={faTimes} className="w-6 h-6 text-white" aria-hidden="true" />
+        </button>
+        <div className="max-w-7xl max-h-full" onClick={(e) => e.stopPropagation()}>
+          <img
+            src={imageUrl}
+            alt={`Full size view of ${lightboxImage.fileName}${lightboxImage.width && lightboxImage.height ? `, ${lightboxImage.width} by ${lightboxImage.height} pixels` : ''}`}
+            className="max-w-full max-h-[90vh] object-contain rounded-lg"
+          />
+          <div className="mt-4 text-center text-gray-300 text-sm" role="status">
+            {lightboxImage.fileName} ({(lightboxImage.size / 1024).toFixed(1)} KB)
+            {lightboxImage.width && lightboxImage.height && (
+              <span> • {lightboxImage.width} × {lightboxImage.height}</span>
+            )}
           </div>
         </div>
       </div>
+    )
+  }
+
+  if (isUser) {
+    // User message - right aligned with gray bubble
+    return (
+      <>
+        <div className="px-4 py-3">
+          <div className="max-w-3xl mx-auto flex justify-end">
+            <div 
+              className="max-w-[70%] rounded-3xl px-5 py-3"
+              style={{ backgroundColor: '#2F2F2F' }}
+            >
+              {message.images && message.images.length > 0 && renderImages(message.images)}
+              <div className="text-sm whitespace-pre-wrap break-words" style={{ color: 'var(--color-foreground)' }}>
+                {message.content}
+              </div>
+            </div>
+          </div>
+        </div>
+        {renderLightbox()}
+      </>
     )
   }
 
@@ -150,10 +317,11 @@ export function ChatMessage({ message, rendererPlugins = [], previousMessage }: 
   const hasCompletedSearch = hasAutoSearch && searchSources.length > 0
   
   return (
-    <div className="px-4 py-1 group">
-      <div className="max-w-3xl mx-auto" style={{ minHeight: '2rem' }}>
-        {/* Searched Web Indicator - only show after search completes */}
-        {hasCompletedSearch && (
+    <>
+      <div className="px-4 py-1 group">
+        <div className="max-w-3xl mx-auto" style={{ minHeight: '2rem' }}>
+          {/* Searched Web Indicator - only show after search completes */}
+          {hasCompletedSearch && (
           <div className="flex items-center gap-2 text-sm text-gray-400 mb-1">
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -170,6 +338,13 @@ export function ChatMessage({ message, rendererPlugins = [], previousMessage }: 
                 />
               ))}
             </div>
+          </div>
+        )}
+        
+        {/* Render images if present */}
+        {message.images && message.images.length > 0 && (
+          <div className="mb-3">
+            {renderImages(message.images)}
           </div>
         )}
         
@@ -279,7 +454,7 @@ export function ChatMessage({ message, rendererPlugins = [], previousMessage }: 
               {isCopied ? (
                 <FontAwesomeIcon icon={faCheck} style={{ width: '16px', height: '16px', color: 'currentColor' }} />
               ) : (
-                <img src="/src/assets/content_copy.svg" alt="Copy" className="w-4 h-4" />
+                <img src={contentCopyIcon} alt="Copy" className="w-4 h-4" />
               )}
             </button>
             
@@ -288,7 +463,7 @@ export function ChatMessage({ message, rendererPlugins = [], previousMessage }: 
               className="p-1.5 rounded hover:bg-white/10 transition-colors"
               title="Info"
             >
-              <img src="/src/assets/info_icon.svg" alt="Info" className="w-4 h-4" />
+              <img src={infoIcon} alt="Info" className="w-4 h-4" />
             </button>
             
             {/* Refresh Button */}
@@ -296,11 +471,13 @@ export function ChatMessage({ message, rendererPlugins = [], previousMessage }: 
               className="p-1.5 rounded hover:bg-white/10 transition-colors"
               title="Regenerate"
             >
-              <img src="/src/assets/refresh.svg" alt="Refresh" className="w-4 h-4" />
+              <img src={refreshIcon} alt="Refresh" className="w-4 h-4" />
             </button>
           </div>
         )}
       </div>
     </div>
+    {renderLightbox()}
+  </>
   )
 }

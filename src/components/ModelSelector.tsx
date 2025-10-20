@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, Eye, Brain } from 'lucide-react'
 import type { ProviderConfig, ModelInfo } from '../types'
 import { cn } from '../lib/utils'
 import { ProviderHealthMonitor, type ProviderHealthStatus } from '../services/ProviderHealthMonitor'
@@ -14,6 +14,7 @@ interface ModelSelectorProps {
   onLoadModels: (provider: ProviderConfig) => void
   openUpwards?: boolean
   isLoadingModels?: boolean
+  onCapabilitiesChange?: (capabilities: ModelInfo['capabilities']) => void
 }
 
 export function ModelSelector({
@@ -26,6 +27,7 @@ export function ModelSelector({
   onLoadModels,
   openUpwards = true,
   isLoadingModels = false,
+  onCapabilitiesChange,
 }: ModelSelectorProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [connectionStatus, setConnectionStatus] = useState<Map<string, ProviderHealthStatus>>(new Map())
@@ -85,6 +87,14 @@ export function ModelSelector({
       onLoadModels(selectedProvider)
     }
   }, [isOpen, models.length, selectedProvider, onLoadModels])
+
+  // Notify parent of capability changes when selected model changes
+  useEffect(() => {
+    if (!onCapabilitiesChange) return
+    
+    const currentModel = models.find(m => m.name === selectedModel)
+    onCapabilitiesChange(currentModel?.capabilities)
+  }, [selectedModel, models, onCapabilitiesChange])
 
   const handleProviderClick = (provider: ProviderConfig) => {
     onSelectProvider(provider)
@@ -211,23 +221,53 @@ export function ModelSelector({
               <div className="p-4 text-center text-gray-500 text-sm">No models available</div>
             ) : (
               <div className="p-2">
-                {models.map((model) => (
-                  <button
-                    key={model.name}
-                    onClick={() => handleModelClick(model.name)}
-                    className={cn(
-                      "w-full text-left px-3 py-2 rounded-lg text-sm transition-all",
-                      selectedModel === model.name
-                        ? "bg-white/20 text-white"
-                        : "text-gray-300 hover:bg-white/10"
-                    )}
-                  >
-                    <div className="font-medium">{model.name}</div>
-                    {model.size && (
-                      <div className="text-xs text-gray-500 mt-0.5">{model.size}</div>
-                    )}
-                  </button>
-                ))}
+                {models.map((model) => {
+                  const hasVision = model.capabilities?.vision ?? false
+                  const hasReasoning = model.capabilities?.reasoning ?? false
+                  
+                  // Build tooltip text
+                  const tooltipParts = []
+                  if (hasVision) tooltipParts.push('Supports image analysis')
+                  if (hasReasoning) tooltipParts.push('Supports reasoning')
+                  const tooltip = tooltipParts.length > 0 ? tooltipParts.join(' • ') : undefined
+                  
+                  return (
+                    <button
+                      key={model.name}
+                      onClick={() => handleModelClick(model.name)}
+                      className={cn(
+                        "w-full text-left px-3 py-2 rounded-lg text-sm transition-all",
+                        selectedModel === model.name
+                          ? "bg-white/20 text-white"
+                          : "text-gray-300 hover:bg-white/10"
+                      )}
+                      title={tooltip}
+                    >
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1">
+                          <div className="font-medium">{model.name}</div>
+                          {model.size && (
+                            <div className="text-xs text-gray-500 mt-0.5">{model.size}</div>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          {hasVision && (
+                            <Eye 
+                              className="w-4 h-4 text-blue-400" 
+                              aria-label="Supports image analysis"
+                            />
+                          )}
+                          {hasReasoning && (
+                            <Brain 
+                              className="w-4 h-4 text-purple-400" 
+                              aria-label="Supports reasoning"
+                            />
+                          )}
+                        </div>
+                      </div>
+                    </button>
+                  )
+                })}
               </div>
             )}
           </div>

@@ -1,0 +1,18 @@
+# HTTP plugin permissions for OpenChat
+# Allow all HTTP/HTTPS requests for maximum flexibility
+
+[[permission]]
+identifier = "allow-all-http"
+description = "Allows all HTTP and HTTPS requests including localhost"
+
+[[permission.scope.allow]]
+url = "http://localhost:*"
+
+[[permission.scope.allow]]
+url = "http://127.0.0.1:*"
+
+[[permission.scope.allow]]
+url = "http://*"
+
+[[permission.scope.allow]]
+url = "https://*"

@@ -12,14 +12,15 @@
   "app": {
     "windows": [
       {
-        "title": "OpenChat v0.4.6 (test)",
-        "width": 800,
-        "height": 600
+        "title": "OpenChat v0.4.6",
+        "width": 1200,
+        "height": 800
       }
     ],
     "security": {
-      "csp": null
-    }
+      "csp": "default-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self' http://localhost:* http://127.0.0.1:* https://* http://* ws://localhost:* ws://127.0.0.1:* wss://*; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: http: https:; font-src 'self' data:; media-src 'self' http: https:; object-src 'none'; base-uri 'self';"
+    },
+    "withGlobalTauri": true
   },
   "bundle": {
     "active": true,

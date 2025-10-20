@@ -1,6 +1,7 @@
 // Ollama provider implementation
 import { BaseProvider } from './base'
 import type { ChatCompletionRequest, ModelInfo } from '../types'
+import { createModelCapabilities } from '../lib/visionDetection'
 
 export class OllamaProvider extends BaseProvider {
   async listModels(): Promise<ModelInfo[]> {
@@ -15,7 +16,14 @@ export class OllamaProvider extends BaseProvider {
       }
 
       const data = await response.json()
-      return data.models || []
+      
+      // Add vision capabilities to models that support it
+      const models = (data.models || []).map((model: any) => ({
+        ...model,
+        capabilities: createModelCapabilities(model.name, 'ollama'),
+      }))
+      
+      return models
     } catch (error) {
       // Silently handle connection errors - provider is likely not running
       const errorMessage = error instanceof Error ? error.message : String(error)
@@ -33,9 +41,31 @@ export class OllamaProvider extends BaseProvider {
   ): Promise<string> {
     const url = `${this.config.baseUrl}/api/chat`
     
+    // Convert messages to Ollama format with images
+    const formattedMessages = request.messages.map(msg => {
+      // Check if message has images (from extended Message type)
+      const messageWithImages = msg as any
+      if (messageWithImages.images && messageWithImages.images.length > 0) {
+        // Ollama expects images as an array of base64 strings
+        const images = messageWithImages.images.map((img: any) => img.data)
+        
+        return {
+          role: msg.role,
+          content: msg.content,
+          images
+        }
+      }
+      
+      // Regular text-only message
+      return {
+        role: msg.role,
+        content: msg.content
+      }
+    })
+    
     const body = {
       model: request.model,
-      messages: request.messages,
+      messages: formattedMessages,
       stream: !!onChunk,
       options: {
         temperature: request.temperature,

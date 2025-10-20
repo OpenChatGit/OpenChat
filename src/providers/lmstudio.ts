@@ -1,6 +1,7 @@
 // LM Studio provider implementation (OpenAI-compatible API)
 import { BaseProvider } from './base'
 import type { ChatCompletionRequest, ChatCompletionResponse, ModelInfo, StreamResponse } from '../types'
+import { createModelCapabilities } from '../lib/visionDetection'
 
 export class LMStudioProvider extends BaseProvider {
   private buildHeaders(includeJson = false): HeadersInit {
@@ -36,6 +37,7 @@ export class LMStudioProvider extends BaseProvider {
         name: model.id,
         size: model.size,
         details: model,
+        capabilities: createModelCapabilities(model.id, 'lmstudio'),
       }))
     } catch (error) {
       // Silently handle connection errors - provider is likely not running

@@ -1,13 +1,15 @@
 // llama.cpp server provider implementation
 import { BaseProvider } from './base'
 import type { ChatCompletionRequest, ChatCompletionResponse, ModelInfo, StreamResponse } from '../types'
+import { createModelCapabilities } from '../lib/visionDetection'
 
 export class LlamaCppProvider extends BaseProvider {
   async listModels(): Promise<ModelInfo[]> {
     // llama.cpp doesn't have a models endpoint, return a default entry
     return [{
       name: 'llama.cpp-model',
-      details: { info: 'Model loaded in llama.cpp server' }
+      details: { info: 'Model loaded in llama.cpp server' },
+      capabilities: createModelCapabilities('llama.cpp-model', 'llamacpp'),
     }]
   }
 

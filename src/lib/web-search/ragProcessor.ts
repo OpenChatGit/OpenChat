@@ -25,7 +25,7 @@ export class RAGProcessor {
   async process(query: string, contents: ScrapedContent[]): Promise<ProcessedContext> {
     // Step 1: Chunk all content
     const allChunks: ContentChunk[] = [];
-    
+
     for (const content of contents) {
       const chunks = this.chunkContent(content);
       allChunks.push(...chunks);
@@ -51,14 +51,14 @@ export class RAGProcessor {
   chunkContent(content: ScrapedContent): ContentChunk[] {
     const chunks: ContentChunk[] = [];
     const text = content.content;
-    
+
     if (!text || text.trim().length === 0) {
       return chunks;
     }
 
     // Split into sentences (basic sentence boundary detection)
     const sentences = this.splitIntoSentences(text);
-    
+
     let currentChunk = '';
     let position = 0;
 
@@ -105,7 +105,7 @@ export class RAGProcessor {
     // Also handle common abbreviations
     const sentences: string[] = [];
     const regex = /[.!?]+[\s]+(?=[A-Z])/g;
-    
+
     let lastIndex = 0;
     let match;
 
@@ -137,7 +137,7 @@ export class RAGProcessor {
     // Get last N characters, but try to start at a word boundary
     const overlapText = chunk.substring(chunk.length - this.config.chunkOverlap);
     const firstSpace = overlapText.indexOf(' ');
-    
+
     if (firstSpace > 0 && firstSpace < overlapText.length / 2) {
       return overlapText.substring(firstSpace + 1);
     }
@@ -248,7 +248,7 @@ export class RAGProcessor {
   ): number {
     const chunkText = chunk.content.toLowerCase();
     const chunkTerms = this.extractTerms(chunkText);
-    
+
     let score = 0;
     const termFreq = new Map<string, number>();
 
@@ -345,7 +345,7 @@ export class RAGProcessor {
 
     for (const chunk of filtered) {
       const count = sourceCount.get(chunk.source) || 0;
-      
+
       if (count < 3) {
         selected.push(chunk);
         sourceCount.set(chunk.source, count + 1);

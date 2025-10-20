@@ -13,6 +13,48 @@ fn greet(name: &str) -> String {
 }
 
 #[tauri::command]
+async fn proxy_http_request(url: String, method: String, body: Option<String>) -> Result<String, String> {
+    eprintln!("[Rust Proxy] Request: {} {}", method, url);
+    
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .build()
+        .map_err(|e| format!("Failed to build client: {}", e))?;
+    
+    let request = match method.to_uppercase().as_str() {
+        "GET" => client.get(&url),
+        "POST" => {
+            let mut req = client.post(&url);
+            if let Some(b) = body {
+                req = req.header("Content-Type", "application/json").body(b);
+            }
+            req
+        }
+        _ => return Err(format!("Unsupported method: {}", method)),
+    };
+    
+    let response = request
+        .send()
+        .await
+        .map_err(|e| format!("Request failed: {}", e))?;
+    
+    let status = response.status();
+    eprintln!("[Rust Proxy] Response status: {}", status);
+    
+    if !status.is_success() {
+        return Err(format!("Request failed with status: {}", status));
+    }
+    
+    let text = response
+        .text()
+        .await
+        .map_err(|e| format!("Failed to read response: {}", e))?;
+    
+    eprintln!("[Rust Proxy] Response length: {} bytes", text.len());
+    Ok(text)
+}
+
+#[tauri::command]
 fn fetch_url(url: String) -> Result<String, String> {
     let parsed = Url::parse(&url).map_err(|err| format!("Invalid URL: {err}"))?;
 
@@ -63,8 +105,11 @@ fn fetch_url_browser(url: String, browser_path: Option<String>) -> Result<String
         ..Default::default()
     };
     
+    // Use provided path, or try to find Chrome automatically
     if let Some(path) = browser_path {
         launch_options.path = Some(std::path::PathBuf::from(path));
+    } else if let Some(path) = find_chrome_path() {
+        launch_options.path = Some(path);
     }
     
     let browser = Browser::new(launch_options)
@@ -248,6 +293,85 @@ fn scrape_single_url_with_retry(url: String, timeout_ms: u64, max_retries: u32) 
     }
 }
 
+// Fallback function to scrape using reqwest (no browser)
+fn scrape_with_reqwest(url: &str, timeout_ms: u64) -> Result<ScrapedContent, String> {
+    let client = Client::builder()
+        .timeout(Duration::from_millis(timeout_ms))
+        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/115.0")
+        .build()
+        .map_err(|err| format!("Failed to build HTTP client: {err}"))?;
+
+    let response = client
+        .get(url)
+        .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
+        .header("Accept-Language", "en-US,en;q=0.9")
+        .send()
+        .map_err(|err| format!("Request failed: {err}"))?;
+
+    if !response.status().is_success() {
+        return Err(format!("Request failed with status {}", response.status()));
+    }
+
+    let html = response
+        .text()
+        .map_err(|err| format!("Failed to read response body: {err}"))?;
+
+    // Simple HTML parsing - extract title and body text
+    let title = html
+        .split("<title>")
+        .nth(1)
+        .and_then(|s| s.split("</title>").next())
+        .unwrap_or("Untitled")
+        .to_string();
+
+    // Very basic content extraction - just get the text
+    let content = clean_text(&html);
+    let word_count = content.split_whitespace().count();
+    let domain = extract_domain(url);
+
+    Ok(ScrapedContent {
+        url: url.to_string(),
+        title: clean_text(&title),
+        content,
+        metadata: ContentMetadata {
+            published_date: None,
+            author: None,
+            domain,
+            word_count,
+        },
+    })
+}
+
+// Helper function to find Chrome/Chromium on the system
+fn find_chrome_path() -> Option<std::path::PathBuf> {
+    // Common Chrome/Chromium paths on Windows
+    let possible_paths = vec![
+        // Chrome
+        std::env::var("PROGRAMFILES").ok().map(|p| format!("{}\\Google\\Chrome\\Application\\chrome.exe", p)),
+        std::env::var("PROGRAMFILES(X86)").ok().map(|p| format!("{}\\Google\\Chrome\\Application\\chrome.exe", p)),
+        std::env::var("LOCALAPPDATA").ok().map(|p| format!("{}\\Google\\Chrome\\Application\\chrome.exe", p)),
+        // Chromium
+        std::env::var("PROGRAMFILES").ok().map(|p| format!("{}\\Chromium\\Application\\chrome.exe", p)),
+        std::env::var("LOCALAPPDATA").ok().map(|p| format!("{}\\Chromium\\Application\\chrome.exe", p)),
+        // Edge (Chromium-based)
+        std::env::var("PROGRAMFILES(X86)").ok().map(|p| format!("{}\\Microsoft\\Edge\\Application\\msedge.exe", p)),
+        std::env::var("PROGRAMFILES").ok().map(|p| format!("{}\\Microsoft\\Edge\\Application\\msedge.exe", p)),
+    ];
+
+    for path_opt in possible_paths {
+        if let Some(path_str) = path_opt {
+            let path = std::path::PathBuf::from(&path_str);
+            if path.exists() {
+                eprintln!("Found browser at: {}", path_str);
+                return Some(path);
+            }
+        }
+    }
+
+    eprintln!("No Chrome/Chromium/Edge browser found on system");
+    None
+}
+
 // Internal function to scrape a single URL
 fn scrape_single_url_internal(url: &str, timeout_ms: u64) -> Result<ScrapedContent, String> {
     // Validate URL
@@ -258,15 +382,28 @@ fn scrape_single_url_internal(url: &str, timeout_ms: u64) -> Result<ScrapedConte
         _ => return Err("Only http and https schemes are allowed".to_string()),
     }
     
-    // Launch headless browser
-    let launch_options = LaunchOptions {
+    // Try to find Chrome on the system
+    let chrome_path = find_chrome_path();
+    
+    // Try to launch headless browser, fallback to reqwest if it fails
+    let mut launch_options = LaunchOptions {
         headless: true,
         sandbox: false,
         ..Default::default()
     };
     
-    let browser = Browser::new(launch_options)
-        .map_err(|err| format!("Failed to launch browser: {err}"))?;
+    // Use found Chrome path if available
+    if let Some(path) = chrome_path {
+        launch_options.path = Some(path);
+    }
+    
+    let browser = match Browser::new(launch_options) {
+        Ok(b) => b,
+        Err(err) => {
+            eprintln!("Failed to launch browser, falling back to reqwest: {}", err);
+            return scrape_with_reqwest(url, timeout_ms);
+        }
+    };
     
     let tab = browser
         .new_tab()
@@ -523,6 +660,7 @@ async fn scrape_url(
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_http::init())
         .invoke_handler(tauri::generate_handler![
             greet, 
             fetch_url, 
@@ -530,7 +668,8 @@ pub fn run() {
             web_search_and_scrape, 
             search_duckduckgo,
             scrape_urls,
-            scrape_url
+            scrape_url,
+            proxy_http_request
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

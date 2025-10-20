@@ -1,6 +1,7 @@
 // Anthropic provider implementation
 import { BaseProvider } from './base'
 import type { ChatCompletionRequest, ModelInfo } from '../types'
+import { createModelCapabilities } from '../lib/visionDetection'
 
 export class AnthropicProvider extends BaseProvider {
     async listModels(): Promise<ModelInfo[]> {
@@ -16,6 +17,7 @@ export class AnthropicProvider extends BaseProvider {
                     description: 'Most intelligent model (Latest)',
                     context_window: 200000,
                 },
+                capabilities: createModelCapabilities('claude-3-5-sonnet-20241022', 'anthropic'),
             },
             {
                 name: 'claude-3-5-haiku-20241022',
@@ -26,6 +28,7 @@ export class AnthropicProvider extends BaseProvider {
                     description: 'Fastest model',
                     context_window: 200000,
                 },
+                capabilities: createModelCapabilities('claude-3-5-haiku-20241022', 'anthropic'),
             },
             {
                 name: 'claude-3-opus-20240229',
@@ -36,6 +39,7 @@ export class AnthropicProvider extends BaseProvider {
                     description: 'Most capable (Previous generation)',
                     context_window: 200000,
                 },
+                capabilities: createModelCapabilities('claude-3-opus-20240229', 'anthropic'),
             },
             {
                 name: 'claude-3-sonnet-20240229',
@@ -46,6 +50,7 @@ export class AnthropicProvider extends BaseProvider {
                     description: 'Balanced performance',
                     context_window: 200000,
                 },
+                capabilities: createModelCapabilities('claude-3-sonnet-20240229', 'anthropic'),
             },
             {
                 name: 'claude-3-haiku-20240307',
@@ -56,6 +61,7 @@ export class AnthropicProvider extends BaseProvider {
                     description: 'Fast and compact',
                     context_window: 200000,
                 },
+                capabilities: createModelCapabilities('claude-3-haiku-20240307', 'anthropic'),
             },
         ]
 
@@ -75,14 +81,54 @@ export class AnthropicProvider extends BaseProvider {
 
         const url = `${this.config.baseUrl}/v1/messages`
 
+        // Helper function to check if error is image-related
+        const isImageSizeError = (errorMessage: string): boolean => {
+            const lowerMsg = errorMessage.toLowerCase()
+            return lowerMsg.includes('image') && (
+                lowerMsg.includes('too large') ||
+                lowerMsg.includes('size') ||
+                lowerMsg.includes('exceeds') ||
+                lowerMsg.includes('maximum')
+            )
+        }
+
         // Convert messages to Anthropic format
         const systemMessage = request.messages.find(m => m.role === 'system')
         const conversationMessages = request.messages
             .filter(m => m.role !== 'system')
-            .map(m => ({
-                role: m.role === 'assistant' ? 'assistant' : 'user',
-                content: m.content,
-            }))
+            .map(m => {
+                // Check if message has images (from extended Message type)
+                const messageWithImages = m as any
+                if (messageWithImages.images && messageWithImages.images.length > 0) {
+                    // Convert to content array with text and image blocks
+                    const content: Array<{ type: string; text?: string; source?: { type: string; media_type: string; data: string } }> = [
+                        { type: 'text', text: m.content }
+                    ]
+                    
+                    // Add each image
+                    for (const image of messageWithImages.images) {
+                        content.push({
+                            type: 'image',
+                            source: {
+                                type: 'base64',
+                                media_type: image.mimeType,
+                                data: image.data
+                            }
+                        })
+                    }
+                    
+                    return {
+                        role: m.role === 'assistant' ? 'assistant' : 'user',
+                        content
+                    }
+                }
+                
+                // Regular text-only message
+                return {
+                    role: m.role === 'assistant' ? 'assistant' : 'user',
+                    content: m.content,
+                }
+            })
 
         const body = {
             model: request.model,
@@ -115,6 +161,15 @@ export class AnthropicProvider extends BaseProvider {
 
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}))
+                const errorMessage = errorData.error?.message || response.statusText
+                
+                // Check if it's an image size error
+                if (isImageSizeError(errorMessage)) {
+                    throw new Error(
+                        `Image too large for Anthropic. Please try with smaller images (max 5MB per image).`
+                    )
+                }
+                
                 throw new Error(
                     `Anthropic request failed: ${response.statusText}${errorData.error?.message ? ` - ${errorData.error.message}` : ''
                     }`
@@ -141,6 +196,15 @@ export class AnthropicProvider extends BaseProvider {
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}))
+            const errorMessage = errorData.error?.message || response.statusText
+            
+            // Check if it's an image size error
+            if (isImageSizeError(errorMessage)) {
+                throw new Error(
+                    `Image too large for Anthropic. Please try with smaller images (max 5MB per image).`
+                )
+            }
+            
             throw new Error(
                 `Anthropic request failed: ${response.statusText}${errorData.error?.message ? ` - ${errorData.error.message}` : ''
                 }`

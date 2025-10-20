@@ -1,14 +1,14 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ChatMessage } from './ChatMessage'
 import { ChatInput } from './ChatInput'
-import type { ChatSession, ProviderConfig, ModelInfo } from '../types'
+import type { ChatSession, ProviderConfig, ModelInfo, ImageAttachment } from '../types'
 import type { RendererPlugin } from '../plugins/core'
 
 interface ChatAreaProps {
   session: ChatSession | null
   isGenerating: boolean
-  onSendMessage: (content: string) => void
-  onSendMessageWithNewChat: (content: string) => void
+  onSendMessage: (content: string, images?: ImageAttachment[]) => void
+  onSendMessageWithNewChat: (content: string, images?: ImageAttachment[]) => void
   rendererPlugins?: RendererPlugin[]
   providers: ProviderConfig[]
   selectedProvider: ProviderConfig | null
@@ -40,6 +40,7 @@ export function ChatArea({
   onToggleAutoSearch = () => {}
 }: ChatAreaProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const [modelCapabilities, setModelCapabilities] = useState<ModelInfo['capabilities']>()
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -72,6 +73,8 @@ export function ChatArea({
             onLoadModels={onLoadModels}
             autoSearchEnabled={autoSearchEnabled}
             onToggleAutoSearch={onToggleAutoSearch}
+            modelCapabilities={modelCapabilities}
+            onCapabilitiesChange={setModelCapabilities}
           />
         </div>
       </div>
@@ -125,6 +128,8 @@ export function ChatArea({
         isLoadingModels={isLoadingModels}
         autoSearchEnabled={autoSearchEnabled}
         onToggleAutoSearch={onToggleAutoSearch}
+        modelCapabilities={modelCapabilities}
+        onCapabilitiesChange={setModelCapabilities}
       />
     </div>
   )

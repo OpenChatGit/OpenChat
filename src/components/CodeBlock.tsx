@@ -33,7 +33,7 @@ const CodeBlockComponent = ({
   const [isHighlighting, setIsHighlighting] = useState(false)
   const [highlightError, setHighlightError] = useState(false)
   const lastCodeRef = useRef<string>('')
-  const highlightTimerRef = useRef<NodeJS.Timeout | undefined>(undefined)
+  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const abortControllerRef = useRef<AbortController | null>(null)
 
   useEffect(() => {

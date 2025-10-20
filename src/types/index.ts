@@ -2,11 +2,23 @@
 
 export type ProviderType = 'ollama' | 'lmstudio' | 'llamacpp' | 'koboldcpp' | 'textgen-webui' | 'anthropic' | 'openai';
 
+export interface ImageAttachment {
+  id: string;
+  data: string; // Base64 encoded image data
+  mimeType: string; // e.g., 'image/jpeg', 'image/png'
+  fileName: string;
+  size: number; // File size in bytes
+  width?: number;
+  height?: number;
+  url?: string; // Optional: For displaying the image
+}
+
 export interface Message {
   id: string;
   role: 'user' | 'assistant' | 'system';
   content: string;
   timestamp: number;
+  images?: ImageAttachment[]; // Array of attached images
   isReasoning?: boolean; // Flag to indicate if this is a reasoning model response
   isHidden?: boolean; // Hide from UI (tool results, etc.)
   status?: 'thinking' | 'searching' | 'processing' | 'generating' | 'cancelled'; // Status indicator
@@ -47,6 +59,12 @@ export interface ModelInfo {
   modified?: string;
   digest?: string;
   details?: Record<string, any>;
+  capabilities?: {
+    vision?: boolean; // Indicates if model supports vision
+    maxImageSize?: number; // Max image size in bytes
+    maxImages?: number; // Max number of images per message
+    reasoning?: boolean; // Indicates if model supports reasoning/thinking
+  };
 }
 
 export interface StreamChunk {

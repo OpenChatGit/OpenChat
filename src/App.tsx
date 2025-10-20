@@ -7,6 +7,7 @@ import { useProviders } from './hooks/useProviders'
 import { usePlugins } from './hooks/usePlugins'
 import { ProviderHealthMonitor } from './services/ProviderHealthMonitor'
 import type { RendererPlugin } from './plugins/core'
+import type { ImageAttachment } from './types'
 
 function App() {
   const [showSettings, setShowSettings] = useState(false)
@@ -77,12 +78,12 @@ function App() {
     return session
   }
 
-  const handleSendMessage = async (content: string) => {
+  const handleSendMessage = async (content: string, images?: ImageAttachment[]) => {
     if (!selectedProvider || !selectedModel || !currentSession) return
-    await sendMessage(content, selectedProvider, selectedModel)
+    await sendMessage(content, selectedProvider, selectedModel, currentSession, images)
   }
 
-  const handleSendMessageWithNewChat = async (content: string) => {
+  const handleSendMessageWithNewChat = async (content: string, images?: ImageAttachment[]) => {
     if (!selectedProvider || !selectedModel) {
       setShowSettings(true)
       return
@@ -94,13 +95,14 @@ function App() {
       role: 'user' as const,
       content,
       timestamp: Date.now(),
+      images: images && images.length > 0 ? images : undefined,
     }
     
     // Create session WITH the user message already in it
     const session = createSession(selectedProvider, selectedModel, userMessage)
     
     // Now send to AI (reuse existing user message to avoid duplicates)
-    await sendMessage(content, selectedProvider, selectedModel, session)
+    await sendMessage(content, selectedProvider, selectedModel, session, images)
   }
 
   return (

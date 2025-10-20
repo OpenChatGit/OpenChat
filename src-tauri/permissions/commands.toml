@@ -1,0 +1,55 @@
+# Custom command permissions for OpenChat
+
+[[permission]]
+identifier = "allow-greet"
+description = "Allows the greet command"
+commands.allow = ["greet"]
+
+[[permission]]
+identifier = "allow-fetch-url"
+description = "Allows fetching URLs"
+commands.allow = ["fetch_url"]
+
+[[permission]]
+identifier = "allow-fetch-url-browser"
+description = "Allows fetching URLs with browser"
+commands.allow = ["fetch_url_browser"]
+
+[[permission]]
+identifier = "allow-search-duckduckgo"
+description = "Allows DuckDuckGo search"
+commands.allow = ["search_duckduckgo"]
+
+[[permission]]
+identifier = "allow-scrape-urls"
+description = "Allows scraping multiple URLs"
+commands.allow = ["scrape_urls"]
+
+[[permission]]
+identifier = "allow-scrape-url"
+description = "Allows scraping a single URL"
+commands.allow = ["scrape_url"]
+
+[[permission]]
+identifier = "allow-web-search-and-scrape"
+description = "Allows web search and scrape"
+commands.allow = ["web_search_and_scrape"]
+
+[[permission]]
+identifier = "allow-proxy-http-request"
+description = "Allows proxying HTTP requests through Rust backend"
+commands.allow = ["proxy_http_request"]
+
+[[permission]]
+identifier = "default"
+description = "Default permissions for all custom commands"
+commands.allow = [
+  "greet",
+  "fetch_url",
+  "fetch_url_browser",
+  "search_duckduckgo",
+  "scrape_urls",
+  "scrape_url",
+  "web_search_and_scrape",
+  "proxy_http_request"
+]

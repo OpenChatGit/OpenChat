@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faChevronDown, faChevronUp, faCheck } from '@fortawesome/free-solid-svg-icons'
+import contentCopyIcon from '../assets/content_copy.svg'
 
 interface ReasoningBlockProps {
   content: string
@@ -41,7 +42,7 @@ export function ReasoningBlock({ content, isComplete = false }: ReasoningBlockPr
             {copied ? (
               <FontAwesomeIcon icon={faCheck} className="w-4 h-4" />
             ) : (
-              <img src="/src/assets/content_copy.svg" alt="Copy" className="w-4 h-4" />
+              <img src={contentCopyIcon} alt="Copy" className="w-4 h-4" />
             )}
           </button>
         )}

@@ -1,5 +1,6 @@
 // Base provider interface - all providers must implement this
 import type { ChatCompletionRequest, ModelInfo, ProviderConfig } from '../types'
+import { tauriFetch } from '../lib/tauriFetch'
 
 export abstract class BaseProvider {
   protected config: ProviderConfig
@@ -45,7 +46,8 @@ export abstract class BaseProvider {
     }
 
     try {
-      const response = await fetch(url, {
+      // Use tauriFetch instead of fetch for Tauri compatibility
+      const response = await tauriFetch(url, {
         ...options,
         signal: controller.signal,
       })

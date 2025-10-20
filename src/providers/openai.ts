@@ -1,6 +1,7 @@
 // OpenAI provider implementation
 import { BaseProvider } from './base'
 import type { ChatCompletionRequest, ModelInfo } from '../types'
+import { createModelCapabilities } from '../lib/visionDetection'
 
 export class OpenAIProvider extends BaseProvider {
   async listModels(): Promise<ModelInfo[]> {
@@ -68,6 +69,7 @@ export class OpenAIProvider extends BaseProvider {
             owned_by: model.owned_by,
             created: model.created,
           },
+          capabilities: createModelCapabilities(model.id, 'openai'),
         }))
         .filter((model: any) => {
           // Filter out models that user has hidden
@@ -150,9 +152,54 @@ export class OpenAIProvider extends BaseProvider {
 
     const url = `${this.config.baseUrl}/chat/completions`
     
+    // Convert messages to OpenAI vision format if they contain images
+    const formattedMessages = request.messages.map(msg => {
+      // Check if message has images (from extended Message type)
+      const messageWithImages = msg as any
+      if (messageWithImages.images && messageWithImages.images.length > 0) {
+        // Convert to multi-part content array
+        const content: Array<{ type: string; text?: string; image_url?: { url: string; detail: string } }> = [
+          { type: 'text', text: msg.content }
+        ]
+        
+        // Add each image
+        for (const image of messageWithImages.images) {
+          content.push({
+            type: 'image_url',
+            image_url: {
+              url: `data:${image.mimeType};base64,${image.data}`,
+              detail: 'high'
+            }
+          })
+        }
+        
+        return {
+          role: msg.role,
+          content
+        }
+      }
+      
+      // Regular text-only message
+      return {
+        role: msg.role,
+        content: msg.content
+      }
+    })
+    
+    // Helper function to check if error is image-related
+    const isImageSizeError = (errorMessage: string): boolean => {
+      const lowerMsg = errorMessage.toLowerCase()
+      return lowerMsg.includes('image') && (
+        lowerMsg.includes('too large') ||
+        lowerMsg.includes('size') ||
+        lowerMsg.includes('exceeds') ||
+        lowerMsg.includes('maximum')
+      )
+    }
+    
     const body = {
       model: request.model,
-      messages: request.messages,
+      messages: formattedMessages,
       stream: !!onChunk,
       temperature: request.temperature,
       max_tokens: request.max_tokens,
@@ -181,6 +228,15 @@ export class OpenAIProvider extends BaseProvider {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
+        const errorMessage = errorData.error?.message || response.statusText
+        
+        // Check if it's an image size error
+        if (isImageSizeError(errorMessage)) {
+          throw new Error(
+            `Image too large for OpenAI. Please try with smaller images (max 20MB per image).`
+          )
+        }
+        
         throw new Error(
           `OpenAI request failed: ${response.statusText}${
             errorData.error?.message ? ` - ${errorData.error.message}` : ''
@@ -214,6 +270,15 @@ export class OpenAIProvider extends BaseProvider {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}))
+      const errorMessage = errorData.error?.message || response.statusText
+      
+      // Check if it's an image size error
+      if (isImageSizeError(errorMessage)) {
+        throw new Error(
+          `Image too large for OpenAI. Please try with smaller images (max 20MB per image).`
+        )
+      }
+      
       throw new Error(
         `OpenAI request failed: ${response.statusText}${
           errorData.error?.message ? ` - ${errorData.error.message}` : ''
