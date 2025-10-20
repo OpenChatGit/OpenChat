@@ -40,15 +40,19 @@ OpenChat is a modular, cross-platform LLM chat application built with Tauri, Rea
 - **Flexible configuration** – Switch providers, models, and credentials from the UI.
 - **Rich Markdown support** – Render code blocks, tables, and inline formatting.
 - **Mathematical rendering** – Render LaTeX expressions through KaTeX.
+- **Vision support** – Send images to vision-capable models (GPT-4o, Claude 3.5 Sonnet, Llama 3.2 Vision, etc.) with automatic model detection, drag-and-drop support, and intelligent image processing.
+- **Token usage tracking** – View detailed token consumption (input/output/total) for every AI response with provider-specific tokenization.
 - **Free web search** – Completely rebuilt web search system that's 100% free, with no API keys required. Features intelligent auto-detection, backend scraping, and a streamlined UI with real-time search indicators.
 
 ## Supported Providers
 
-| Provider | Default endpoint | Notes |
-| --- | --- | --- |
-| **Ollama** | `http://localhost:11434` | Local LLM runtime and default backend. |
-| **LM Studio** | `http://localhost:1234` | Desktop application for running quantized models. |
-| **llama.cpp** | `http://localhost:8080` | High-performance inference server for GGUF models. |
+| Provider | Default endpoint | Vision Support | Notes |
+| --- | --- | --- | --- |
+| **Ollama** | `http://localhost:11434` | ✅ Yes | Local LLM runtime and default backend. Supports vision models like Llama 3.2 Vision, LLaVA, and Bakllava. |
+| **LM Studio** | `http://localhost:1234` | ✅ Yes | Desktop application for running quantized models. |
+| **llama.cpp** | `http://localhost:8080` | ✅ Yes | High-performance inference server for GGUF models. |
+| **OpenAI** | `https://api.openai.com/v1` | ✅ Yes | Cloud API with GPT-4o, GPT-4o-mini, and other vision-capable models. |
+| **Anthropic** | `https://api.anthropic.com` | ✅ Yes | Cloud API with Claude 3.5 Sonnet, Claude 3 Opus, and other vision models. |
 
 > 📢 **Deprecation Notice:** LM Studio integration will be removed in upcoming updates. Despite this project being largely built around LM Studio, there were disagreements in the LM Studio Discord regarding alleged self-promotion (which never occurred), and the project was deemed "out of scope" for their community. We respect their decision and will focus on other providers moving forward.
 
@@ -87,6 +91,45 @@ OpenChat is a modular, cross-platform LLM chat application built with Tauri, Rea
    npm run build
    npm run tauri build
    ```
+
+## Vision Support
+
+OpenChat includes comprehensive support for vision-capable AI models, allowing you to send images alongside your text prompts for visual analysis, OCR, diagram interpretation, and more.
+
+### Key Features
+
+- **Automatic Model Detection** – Vision capability is automatically detected for each model based on provider and model name patterns.
+- **Drag & Drop Support** – Simply drag images into the chat input or click to browse.
+- **Multiple Image Formats** – Supports JPEG, PNG, GIF, and WebP with automatic format conversion.
+- **Smart Image Processing** – Automatic resizing and compression to meet provider limits while maintaining quality.
+- **Provider-Specific Optimization** – Respects size limits for each provider (OpenAI: 20MB, Anthropic: 5MB, Ollama: 100MB).
+- **Image Preview** – View attached images before sending with thumbnail previews and lightbox support.
+- **Intelligent Conflict Resolution** – Automatically disables web search when images are attached to prevent conflicts.
+
+### Supported Vision Models
+
+**OpenAI:**
+- GPT-4o, GPT-4o-mini
+- GPT-4-turbo, GPT-4-vision
+
+**Anthropic:**
+- Claude 3.5 Sonnet, Claude 3.5 Haiku
+- Claude 3 Opus, Claude 3 Sonnet, Claude 3 Haiku
+
+**Ollama (Local):**
+- Llama 3.2 Vision (11B, 90B)
+- LLaVA (7B, 13B, 34B)
+- Bakllava
+- Any other vision-capable model
+
+### Usage
+
+1. Select a vision-capable model from the model dropdown (indicated by a 👁️ icon)
+2. Drag and drop an image into the chat input, or click the image button to browse
+3. Add your text prompt describing what you want to know about the image
+4. Send the message - the image will be processed and sent to the model
+
+The system automatically handles image encoding, resizing, and format conversion based on the selected provider's requirements.
 
 ## Web Search System
 
