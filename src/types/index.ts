@@ -58,6 +58,8 @@ export interface ChatSession {
   model: string;
   createdAt: number;
   updatedAt: number;
+  personaPrompt?: string;
+  personaEnabled?: boolean;
 }
 
 export interface ModelInfo {

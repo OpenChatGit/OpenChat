@@ -19,6 +19,9 @@ export abstract class BaseProvider {
 
   abstract testConnection(timeout?: number): Promise<boolean>
 
+  // Optional: Delete a model (only supported by some providers like Ollama)
+  async deleteModel?(modelName: string): Promise<void>
+
   getConfig(): ProviderConfig {
     return this.config
   }

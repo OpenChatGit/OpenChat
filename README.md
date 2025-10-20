@@ -20,6 +20,8 @@ OpenChat is a modular, cross-platform LLM chat application built with Tauri, Rea
 - [Features](#features)
 - [Supported Providers](#supported-providers)
 - [Getting Started](#getting-started)
+- [Vision Support](#vision-support)
+- [Custom AI Personas](#custom-ai-personas)
 - [Web Search System](#web-search-system)
 - [Adding a New Provider](#adding-a-new-provider)
 - [Creating Custom Plugins](#creating-custom-plugins)
@@ -43,6 +45,7 @@ OpenChat is a modular, cross-platform LLM chat application built with Tauri, Rea
 - **Vision support** – Send images to vision-capable models (GPT-4o, Claude 3.5 Sonnet, Llama 3.2 Vision, etc.) with automatic model detection, drag-and-drop support, and intelligent image processing.
 - **Token usage tracking** – View detailed token consumption (input/output/total) for every AI response with provider-specific tokenization.
 - **Free web search** – Completely rebuilt web search system that's 100% free, with no API keys required. Features intelligent auto-detection, backend scraping, and a streamlined UI with real-time search indicators.
+- **Custom AI Personas** – Define custom system prompts per chat session to change how the AI responds. Choose from quick presets (Coding Assistant, Technical Writer, Creative Partner, Friendly Tutor) or create your own persona with specific tone, expertise level, and response style.
 
 ## Supported Providers
 
@@ -130,6 +133,40 @@ OpenChat includes comprehensive support for vision-capable AI models, allowing y
 4. Send the message - the image will be processed and sent to the model
 
 The system automatically handles image encoding, resizing, and format conversion based on the selected provider's requirements.
+
+## Custom AI Personas
+
+OpenChat allows you to define custom AI personas for each chat session, giving you fine-grained control over how the AI responds to your prompts. This feature enables you to tailor the AI's behavior, tone, and expertise to match your specific needs.
+
+### Key Features
+
+- **Session-Specific Personas** – Each chat can have its own unique persona that persists across the conversation.
+- **Quick Presets** – Choose from built-in persona templates:
+  - **Coding Assistant** – Expert software engineer providing clear code solutions with best practices
+  - **Technical Writer** – Documentation expert creating clear, well-structured explanations
+  - **Creative Partner** – Brainstorming partner generating innovative ideas
+  - **Friendly Tutor** – Patient educator breaking down complex topics
+- **Custom Personas** – Write your own persona prompts to define specific behaviors, expertise levels, and response styles.
+- **Visual Indicators** – Clear UI feedback showing when a persona is active with a floating button and status indicators.
+- **Easy Toggle** – Enable or disable personas on the fly without losing your custom prompt.
+
+### How It Works
+
+The persona system combines your custom persona prompt with the global system prompt, allowing you to layer specific instructions on top of the base AI behavior. This gives you the flexibility to:
+
+- Set the AI's expertise level and domain knowledge
+- Define the tone and communication style (formal, casual, technical, creative)
+- Specify response formats (concise, detailed, step-by-step)
+- Establish role-playing scenarios or specific contexts
+
+### Usage
+
+1. Click the **Persona button** (user icon) in the top-right corner of the chat area
+2. Choose a **quick preset** or write your own custom persona prompt
+3. **Enable the toggle** to activate the persona for the current chat
+4. The persona will be applied to all subsequent messages in that session
+
+The persona prompt is stored with the chat session, so you can return to conversations and continue with the same AI personality.
 
 ## Web Search System
 

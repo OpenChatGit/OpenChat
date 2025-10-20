@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect } from 'react'
-import { ChevronDown, Eye, Brain } from 'lucide-react'
+import { ChevronDown, Eye, Brain, MoreVertical, Trash2 } from 'lucide-react'
 import type { ProviderConfig, ModelInfo } from '../types'
 import { cn } from '../lib/utils'
 import { ProviderHealthMonitor, type ProviderHealthStatus } from '../services/ProviderHealthMonitor'
+import { ProviderFactory } from '../providers'
 
 interface ModelSelectorProps {
   providers: ProviderConfig[]
@@ -31,7 +32,10 @@ export function ModelSelector({
 }: ModelSelectorProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [connectionStatus, setConnectionStatus] = useState<Map<string, ProviderHealthStatus>>(new Map())
+  const [openMenuModelName, setOpenMenuModelName] = useState<string | null>(null)
+  const [isDeleting, setIsDeleting] = useState<string | null>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
   const healthMonitor = ProviderHealthMonitor.getInstance()
 
   // Load initial status from monitor on mount
@@ -68,6 +72,7 @@ export function ModelSelector({
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsOpen(false)
+        setOpenMenuModelName(null)
       }
     }
 
@@ -104,6 +109,50 @@ export function ModelSelector({
   const handleModelClick = (model: string) => {
     onSelectModel(model)
     setIsOpen(false)
+  }
+
+  const handleDeleteModel = async (modelName: string, event: React.MouseEvent) => {
+    event.stopPropagation()
+    
+    if (!selectedProvider) return
+    
+    // Confirm deletion
+    if (!confirm(`Are you sure you want to delete the model "${modelName}"? This action cannot be undone.`)) {
+      setOpenMenuModelName(null)
+      return
+    }
+
+    setIsDeleting(modelName)
+    setOpenMenuModelName(null)
+
+    try {
+      const provider = ProviderFactory.createProvider(selectedProvider)
+      
+      // Check if provider supports deleteModel
+      if (provider.deleteModel) {
+        await provider.deleteModel(modelName)
+        
+        // Reload models after deletion
+        onLoadModels(selectedProvider)
+        
+        // If deleted model was selected, clear selection
+        if (selectedModel === modelName) {
+          onSelectModel('')
+        }
+      } else {
+        alert('This provider does not support deleting models.')
+      }
+    } catch (error) {
+      console.error('Failed to delete model:', error)
+      alert(`Failed to delete model: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    } finally {
+      setIsDeleting(null)
+    }
+  }
+
+  const toggleMenu = (modelName: string, event: React.MouseEvent) => {
+    event.stopPropagation()
+    setOpenMenuModelName(openMenuModelName === modelName ? null : modelName)
   }
 
   const renderStatusIndicator = (provider: ProviderConfig) => {
@@ -230,42 +279,75 @@ export function ModelSelector({
                   if (hasVision) tooltipParts.push('Supports image analysis')
                   if (hasReasoning) tooltipParts.push('Supports reasoning')
                   const tooltip = tooltipParts.length > 0 ? tooltipParts.join(' • ') : undefined
+                  const canDelete = selectedProvider?.type === 'ollama' // Only Ollama supports deletion
+                  const isBeingDeleted = isDeleting === model.name
                   
                   return (
-                    <button
-                      key={model.name}
-                      onClick={() => handleModelClick(model.name)}
-                      className={cn(
-                        "w-full text-left px-3 py-2 rounded-lg text-sm transition-all",
-                        selectedModel === model.name
-                          ? "bg-white/20 text-white"
-                          : "text-gray-300 hover:bg-white/10"
+                    <div key={model.name} className="relative">
+                      <button
+                        onClick={() => handleModelClick(model.name)}
+                        disabled={isBeingDeleted}
+                        className={cn(
+                          "w-full text-left px-3 py-2 rounded-lg text-sm transition-all group",
+                          selectedModel === model.name
+                            ? "bg-white/20 text-white"
+                            : "text-gray-300 hover:bg-white/10",
+                          isBeingDeleted && "opacity-50 cursor-not-allowed"
+                        )}
+                        title={tooltip}
+                      >
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium truncate">
+                              {isBeingDeleted ? 'Deleting...' : model.name}
+                            </div>
+                            {model.size && (
+                              <div className="text-xs text-gray-500 mt-0.5">{model.size}</div>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            {hasVision && (
+                              <Eye 
+                                className="w-4 h-4 text-blue-400" 
+                                aria-label="Supports image analysis"
+                              />
+                            )}
+                            {hasReasoning && (
+                              <Brain 
+                                className="w-4 h-4 text-purple-400" 
+                                aria-label="Supports reasoning"
+                              />
+                            )}
+                            {canDelete && !isBeingDeleted && (
+                              <button
+                                onClick={(e) => toggleMenu(model.name, e)}
+                                className="p-1 rounded hover:bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity"
+                                title="More options"
+                              >
+                                <MoreVertical className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </button>
+
+                      {/* Dropdown Menu */}
+                      {openMenuModelName === model.name && canDelete && (
+                        <div
+                          ref={menuRef}
+                          className="absolute right-2 top-full mt-1 z-50 rounded-lg shadow-xl overflow-hidden"
+                          style={{ backgroundColor: '#1C1C1E', minWidth: '150px' }}
+                        >
+                          <button
+                            onClick={(e) => handleDeleteModel(model.name, e)}
+                            className="w-full text-left px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-2"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            Delete Model
+                          </button>
+                        </div>
                       )}
-                      title={tooltip}
-                    >
-                      <div className="flex items-center gap-2">
-                        <div className="flex-1">
-                          <div className="font-medium">{model.name}</div>
-                          {model.size && (
-                            <div className="text-xs text-gray-500 mt-0.5">{model.size}</div>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-1 flex-shrink-0">
-                          {hasVision && (
-                            <Eye 
-                              className="w-4 h-4 text-blue-400" 
-                              aria-label="Supports image analysis"
-                            />
-                          )}
-                          {hasReasoning && (
-                            <Brain 
-                              className="w-4 h-4 text-purple-400" 
-                              aria-label="Supports reasoning"
-                            />
-                          )}
-                        </div>
-                      </div>
-                    </button>
+                    </div>
                   )
                 })}
               </div>

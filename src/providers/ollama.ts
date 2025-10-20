@@ -190,4 +190,25 @@ export class OllamaProvider extends BaseProvider {
       return false
     }
   }
+
+  async deleteModel(modelName: string): Promise<void> {
+    try {
+      const response = await this.fetchWithTimeout(
+        `${this.config.baseUrl}/api/delete`,
+        {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: modelName }),
+        },
+        10000
+      )
+
+      if (!response.ok) {
+        throw new Error(`Failed to delete model: ${response.statusText}`)
+      }
+    } catch (error) {
+      console.error('Failed to delete model:', error)
+      throw error
+    }
+  }
 }

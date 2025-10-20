@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Button } from './ui/Button'
 import { Input } from './ui/Input'
+import { Toggle } from './ui/Toggle'
 import type { RAGConfig } from '../lib/web-search/types'
 import { DEFAULT_RAG_CONFIG } from '../lib/web-search/types'
 
@@ -91,15 +92,10 @@ export function WebSearchSettings({
               Automatically search the web when helpful
             </p>
           </div>
-          <label className="relative inline-flex items-center cursor-pointer">
-            <input
-              type="checkbox"
-              checked={localSettings.autoSearchEnabled}
-              onChange={(e) => updateSetting('autoSearchEnabled', e.target.checked)}
-              className="sr-only peer"
-            />
-            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-          </label>
+          <Toggle
+            checked={localSettings.autoSearchEnabled}
+            onChange={(checked) => updateSetting('autoSearchEnabled', checked)}
+          />
         </div>
 
         {/* Max Results Slider */}
@@ -114,7 +110,10 @@ export function WebSearchSettings({
             max="10"
             value={localSettings.maxResults}
             onChange={(e) => updateSetting('maxResults', parseInt(e.target.value))}
-            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary"
+            className="w-full h-2 bg-gray-600 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer slider-thumb"
+            style={{
+              accentColor: 'var(--color-primary)'
+            }}
           />
           <p className="text-xs text-muted-foreground mt-1">
             Number of search results to retrieve
@@ -129,15 +128,10 @@ export function WebSearchSettings({
               Cache search results for faster responses
             </p>
           </div>
-          <label className="relative inline-flex items-center cursor-pointer">
-            <input
-              type="checkbox"
-              checked={localSettings.cacheEnabled}
-              onChange={(e) => updateSetting('cacheEnabled', e.target.checked)}
-              className="sr-only peer"
-            />
-            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-          </label>
+          <Toggle
+            checked={localSettings.cacheEnabled}
+            onChange={(checked) => updateSetting('cacheEnabled', checked)}
+          />
         </div>
       </div>
 
@@ -163,7 +157,10 @@ export function WebSearchSettings({
             step="100"
             value={localSettings.ragConfig.chunkSize}
             onChange={(e) => updateRAGConfig('chunkSize', parseInt(e.target.value))}
-            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary"
+            className="w-full h-2 bg-gray-600 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer slider-thumb"
+            style={{
+              accentColor: 'var(--color-primary)'
+            }}
           />
           <p className="text-xs text-muted-foreground mt-1">
             Characters per content chunk (500-2000)
@@ -182,7 +179,10 @@ export function WebSearchSettings({
             max="20"
             value={localSettings.ragConfig.maxChunks}
             onChange={(e) => updateRAGConfig('maxChunks', parseInt(e.target.value))}
-            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary"
+            className="w-full h-2 bg-gray-600 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer slider-thumb"
+            style={{
+              accentColor: 'var(--color-primary)'
+            }}
           />
           <p className="text-xs text-muted-foreground mt-1">
             Maximum chunks to include in context (3-20)
@@ -202,7 +202,10 @@ export function WebSearchSettings({
             step="0.05"
             value={localSettings.ragConfig.recencyWeight}
             onChange={(e) => updateRAGConfig('recencyWeight', parseFloat(e.target.value))}
-            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary"
+            className="w-full h-2 bg-gray-600 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer slider-thumb"
+            style={{
+              accentColor: 'var(--color-primary)'
+            }}
           />
           <p className="text-xs text-muted-foreground mt-1">
             Weight for newer content (0.0-1.0)
@@ -222,7 +225,10 @@ export function WebSearchSettings({
             step="0.05"
             value={localSettings.ragConfig.qualityWeight}
             onChange={(e) => updateRAGConfig('qualityWeight', parseFloat(e.target.value))}
-            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary"
+            className="w-full h-2 bg-gray-600 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer slider-thumb"
+            style={{
+              accentColor: 'var(--color-primary)'
+            }}
           />
           <p className="text-xs text-muted-foreground mt-1">
             Weight for content quality (0.0-1.0)

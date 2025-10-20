@@ -3,6 +3,7 @@ import { Sidebar } from './components/Sidebar'
 import { ChatArea } from './components/ChatArea'
 import { SettingsModal } from './components/SettingsModal'
 import { UpdateModal } from './components/UpdateModal'
+import { PersonaSidebar } from './components/PersonaSidebar'
 import { useChatWithTools } from './hooks/useChatWithTools'
 import { useProviders } from './hooks/useProviders'
 import { usePlugins } from './hooks/usePlugins'
@@ -15,6 +16,7 @@ function App() {
   const [showSettings, setShowSettings] = useState(false)
   const [showUpdateModal, setShowUpdateModal] = useState(false)
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
+  const [isPersonaSidebarOpen, setIsPersonaSidebarOpen] = useState(false)
   
   const { 
     pluginManager, 
@@ -38,6 +40,9 @@ function App() {
     sendMessage,
     deleteSession,
     updateSessionTitle,
+    personaPrompt,
+    personaEnabled,
+    updatePersona,
   } = useChatWithTools(pluginManager)
 
   const {
@@ -110,6 +115,10 @@ function App() {
     await sendMessage(content, selectedProvider, selectedModel, session, images)
   }
 
+  const togglePersonaSidebar = () => {
+    setIsPersonaSidebarOpen(!isPersonaSidebarOpen)
+  }
+
   return (
     <div className="flex h-screen overflow-hidden text-foreground relative" style={{ backgroundColor: 'var(--color-main)' }}>
       {/* Sidebar */}
@@ -167,6 +176,8 @@ function App() {
           isLoadingModels={isLoadingModels}
           autoSearchEnabled={autoSearchEnabled}
           onToggleAutoSearch={() => setAutoSearchEnabled(!autoSearchEnabled)}
+          onTogglePersonaSidebar={togglePersonaSidebar}
+          personaEnabled={personaEnabled}
         />
       </div>
 
@@ -199,6 +210,16 @@ function App() {
           onClose={() => setShowUpdateModal(false)}
         />
       )}
+
+      {/* Persona Sidebar */}
+      <PersonaSidebar
+        isOpen={isPersonaSidebarOpen}
+        onClose={() => setIsPersonaSidebarOpen(false)}
+        personaPrompt={personaPrompt}
+        personaEnabled={personaEnabled}
+        onPersonaPromptChange={(prompt) => updatePersona(prompt, personaEnabled)}
+        onPersonaEnabledChange={(enabled) => updatePersona(personaPrompt, enabled)}
+      />
     </div>
   )
 }

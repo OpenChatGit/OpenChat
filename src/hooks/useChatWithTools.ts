@@ -13,6 +13,10 @@ import type { WebSearchSettings } from '../components/WebSearchSettings'
 import { loadWebSearchSettings, saveWebSearchSettings } from '../lib/web-search/settingsStorage'
 import { Tokenizer } from '../lib/tokenizer'
 
+// Global system prompt constant
+// This can be customized in the future to allow user-defined global prompts
+const GLOBAL_SYSTEM_PROMPT = "You are a helpful AI assistant."
+
 export function useChatWithTools(pluginManager: PluginManager) {
   // Load sessions from localStorage on initial mount
   const [sessions, setSessions] = useState<ChatSession[]>(() => {
@@ -39,6 +43,11 @@ export function useChatWithTools(pluginManager: PluginManager) {
   const [isGenerating, setIsGenerating] = useState(false)
   const [autoSearchEnabled, setAutoSearchEnabled] = useState(false)
   const [webSearchSettings, setWebSearchSettings] = useState<WebSearchSettings | null>(null)
+  
+  // Persona state management
+  const [personaPrompt, setPersonaPrompt] = useState<string>('')
+  const [personaEnabled, setPersonaEnabled] = useState<boolean>(false)
+  
   const streamingContentRef = useRef<string>('')
   const toolExecutor = useRef(new ToolExecutor(pluginManager))
   const autoSearchManager = useRef(new AutoSearchManager())
@@ -133,6 +142,17 @@ export function useChatWithTools(pluginManager: PluginManager) {
     }
   }, [])
 
+  // Sync persona state from currentSession when session changes
+  useEffect(() => {
+    if (currentSession) {
+      setPersonaPrompt(currentSession.personaPrompt || '')
+      setPersonaEnabled(currentSession.personaEnabled || false)
+    } else {
+      setPersonaPrompt('')
+      setPersonaEnabled(false)
+    }
+  }, [currentSession])
+
   // Update settings handler
   const updateWebSearchSettings = useCallback((newSettings: WebSearchSettings) => {
     setWebSearchSettings(newSettings)
@@ -172,11 +192,44 @@ export function useChatWithTools(pluginManager: PluginManager) {
       model,
       createdAt: Date.now(),
       updatedAt: Date.now(),
+      personaPrompt: undefined,
+      personaEnabled: false,
     }
 
     setSessions(prev => [newSession, ...prev])
     setCurrentSession(newSession)
     return newSession
+  }, [])
+
+  const updatePersona = useCallback((prompt: string, enabled: boolean) => {
+    if (!currentSession) return
+
+    // Update sessions state
+    setSessions(prev =>
+      prev.map(s =>
+        s.id === currentSession.id
+          ? { ...s, personaPrompt: prompt, personaEnabled: enabled, updatedAt: Date.now() }
+          : s
+      )
+    )
+
+    // Update current session
+    setCurrentSession(prev =>
+      prev ? { ...prev, personaPrompt: prompt, personaEnabled: enabled } : null
+    )
+
+    // Update local state
+    setPersonaPrompt(prompt)
+    setPersonaEnabled(enabled)
+  }, [currentSession])
+
+  const combineSystemPrompts = useCallback((globalPrompt: string, personaPrompt: string, personaEnabled: boolean): string => {
+    if (!personaEnabled || !personaPrompt.trim()) {
+      return globalPrompt
+    }
+
+    // Combine with clear separation
+    return `${globalPrompt}\n\n--- Persona Instructions ---\n${personaPrompt}`
   }, [])
 
   const updateSessionTitle = useCallback((sessionId: string, title: string) => {
@@ -800,11 +853,30 @@ Format: {title}Your Title Here{/title}`
       // Exclude the current user message from previous messages (we'll add it with enhanced content)
       const previousMessages = session.messages.filter(m => m.id !== userMessage.id)
       
-      let messages: Array<{ role: "user" | "assistant" | "system"; content: string; images?: ImageAttachment[] }> = previousMessages.map(m => ({
+      let messages: Array<{ role: "user" | "assistant" | "system"; content: string; images?: ImageAttachment[] }> = []
+      
+      // Combine system prompts and add as first message
+      const combinedSystemPrompt = combineSystemPrompts(
+        GLOBAL_SYSTEM_PROMPT,
+        personaPrompt,
+        personaEnabled
+      )
+      
+      // Add system message only if not already present in previous messages
+      const hasSystemMessage = previousMessages.some(m => m.role === 'system')
+      if (!hasSystemMessage) {
+        messages.push({
+          role: 'system',
+          content: combinedSystemPrompt,
+        })
+      }
+      
+      // Add previous messages (excluding system messages to avoid duplication)
+      messages.push(...previousMessages.filter(m => m.role !== 'system').map(m => ({
         role: m.role as "user" | "assistant" | "system",
         content: m.content,
         images: m.images,
-      }))
+      })))
       
       // Always add current user message with enhanced content (if search was performed, it contains web context)
       console.log('[useChatWithTools] Adding user message')
@@ -982,5 +1054,8 @@ Format: {title}Your Title Here{/title}`
     sendMessage,
     deleteSession,
     updateSessionTitle,
+    personaPrompt,
+    personaEnabled,
+    updatePersona,
   }
 }
