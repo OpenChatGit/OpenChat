@@ -43,6 +43,7 @@ function App() {
     personaPrompt,
     personaEnabled,
     updatePersona,
+    getSourceRegistry,
   } = useChatWithTools(pluginManager)
 
   const {
@@ -178,6 +179,7 @@ function App() {
           onToggleAutoSearch={() => setAutoSearchEnabled(!autoSearchEnabled)}
           onTogglePersonaSidebar={togglePersonaSidebar}
           personaEnabled={personaEnabled}
+          getSourceRegistry={getSourceRegistry}
         />
       </div>
 

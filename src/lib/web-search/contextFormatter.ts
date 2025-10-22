@@ -9,8 +9,19 @@ import type {
   Source,
   OutputFormat
 } from './types';
+import { SourceRegistry } from './sourceRegistry';
 
 export class ContextFormatter {
+  private sourceRegistry?: SourceRegistry;
+
+  /**
+   * Constructor
+   * @param sourceRegistry - Optional SourceRegistry for citation support
+   */
+  constructor(sourceRegistry?: SourceRegistry) {
+    this.sourceRegistry = sourceRegistry;
+  }
+
   /**
    * Format processed context into specified output format
    */
@@ -25,6 +36,32 @@ export class ContextFormatter {
       default:
         return this.formatVerbose(context);
     }
+  }
+
+  /**
+   * Format processed context with citation support
+   * Registers sources in the SourceRegistry and adds citation instructions
+   * 
+   * @param context - The processed context to format
+   * @param format - The output format (default: 'verbose')
+   * @returns Formatted context with citation instructions
+   */
+  formatWithCitations(context: ProcessedContext, format: OutputFormat = 'verbose'): string {
+    if (!this.sourceRegistry) {
+      console.warn('SourceRegistry not available, falling back to standard format');
+      return this.format(context, format);
+    }
+
+    // Register sources from chunks
+    this.registerSources(context.chunks);
+
+    // Format the context
+    let formattedContext = this.format(context, format);
+
+    // Add citation instructions
+    formattedContext = this.addCitationInstructions(formattedContext);
+
+    return formattedContext;
   }
 
   /**
@@ -54,7 +91,11 @@ export class ContextFormatter {
       const url = new URL(source);
       const title = this.extractTitleFromURL(url);
 
-      output += `\n📄 SOURCE ${sourceIndex}: ${title}\n`;
+      // Get source ID from registry if available
+      const sourceId = this.sourceRegistry?.getSourceIdByUrl(source);
+      const sourceLabel = sourceId !== undefined ? `SOURCE ${sourceId}` : `SOURCE ${sourceIndex}`;
+
+      output += `\n📄 ${sourceLabel}: ${title}\n`;
       output += `   Domain: ${domain}\n`;
       
       if (firstChunk.metadata.publishedDate) {
@@ -280,5 +321,83 @@ export class ContextFormatter {
     }
 
     return grouped;
+  }
+
+  /**
+   * Add citation instructions for the LLM
+   * Appends instructions on how to use the citation format
+   * 
+   * @param formattedContext - The formatted context
+   * @returns Context with citation instructions appended
+   */
+  private addCitationInstructions(formattedContext: string): string {
+    const instructions = `
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📝 CITATION INSTRUCTIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+IMPORTANT: When referencing information from the web search results above, 
+you MUST cite your sources using the following format:
+
+【Source X, Section Y】
+
+Where:
+- X is the source number (1, 2, 3, etc.) as shown in the results above
+- Y is the section number within that source (1, 2, 3, etc.)
+
+Example: "Python 3.14.0 was released on October 7, 2025 【Source 2, Section 2】"
+
+You can also cite without a section number if referring to the source in general:
+Example: "According to the official documentation 【Source 1】"
+
+Rules:
+- Always place citations immediately after the relevant information
+- Use the exact format with the special brackets 【】
+- Multiple citations can be used in a single response
+- Cite specific sections when possible for better traceability
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+`;
+
+    return formattedContext + instructions;
+  }
+
+  /**
+   * Register sources from chunks in the SourceRegistry
+   * Groups chunks by source URL and registers each unique source
+   * Also registers sections for each source
+   * 
+   * @param chunks - The content chunks to register
+   */
+  private registerSources(chunks: ContentChunk[]): void {
+    if (!this.sourceRegistry) {
+      return;
+    }
+
+    // Group chunks by source URL
+    const chunksBySource = this.groupChunksBySource(chunks);
+
+    for (const [sourceUrl, sourceChunks] of chunksBySource.entries()) {
+      const firstChunk = sourceChunks[0];
+      const url = new URL(sourceUrl);
+      const title = this.extractTitleFromURL(url);
+      const domain = firstChunk.metadata.domain;
+      const publishedDate = firstChunk.metadata.publishedDate;
+
+      // Register the source and get its ID
+      const sourceId = this.sourceRegistry.registerSource(
+        sourceUrl,
+        title,
+        domain,
+        publishedDate
+      );
+
+      // Register each chunk as a section
+      sourceChunks.forEach((chunk, index) => {
+        const sectionId = index + 1; // 1-based section IDs
+        this.sourceRegistry!.registerSection(sourceId, sectionId, chunk.content);
+      });
+    }
   }
 }

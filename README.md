@@ -2,7 +2,7 @@
 
 # OpenChat
 
-![Version](https://img.shields.io/badge/version-0.4.8-blue)
+![Version](https://img.shields.io/badge/version-0.5.1-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 ![Free Forever](https://img.shields.io/badge/free-forever-brightgreen)
@@ -18,6 +18,7 @@ OpenChat is a modular, cross-platform LLM chat application built with Tauri, Rea
 ## Table of Contents
 
 - [Features](#features)
+- [What's New](#whats-new)
 - [Supported Providers](#supported-providers)
 - [Getting Started](#getting-started)
 - [Vision Support](#vision-support)
@@ -30,6 +31,20 @@ OpenChat is a modular, cross-platform LLM chat application built with Tauri, Rea
 - [Tech Stack](#tech-stack)
 - [License](#license)
 - [Recommended IDE Setup](#recommended-ide-setup)
+
+## What's New
+
+### Version 0.5.1 - Source Citation Support 🎯
+
+OpenChat now includes intelligent source citations for web search results! When the AI uses web search to answer your questions, responses include inline citations `[1]`, `[2]` that reference the sources used.
+
+**Key Features:**
+- **Inline Citations** – Citations appear naturally in the text as `[1]`, `[2]` without disrupting reading flow
+- **Interactive Source Favicons** – Click favicons in the "Searched Web" indicator to highlight related citations
+- **Automatic Source Tracking** – All web search sources are tracked and linked to their citations
+- **Full Markdown Support** – Citations work seamlessly with tables, lists, code blocks, and all markdown formatting
+
+See the full [CHANGELOG.md](CHANGELOG.md) for detailed release notes.
 
 ## Features
 
@@ -44,7 +59,7 @@ OpenChat is a modular, cross-platform LLM chat application built with Tauri, Rea
 - **Mathematical rendering** – Render LaTeX expressions through KaTeX.
 - **Vision support** – Send images to vision-capable models (GPT-4o, Claude 3.5 Sonnet, Llama 3.2 Vision, etc.) with automatic model detection, drag-and-drop support, and intelligent image processing.
 - **Token usage tracking** – View detailed token consumption (input/output/total) for every AI response with provider-specific tokenization.
-- **Free web search** – Completely rebuilt web search system that's 100% free, with no API keys required. Features intelligent auto-detection, backend scraping, and a streamlined UI with real-time search indicators.
+- **Free web search with citations** – Completely rebuilt web search system that's 100% free, with no API keys required. Features intelligent auto-detection, backend scraping, inline source citations, and a streamlined UI with real-time search indicators.
 - **Custom AI Personas** – Define custom system prompts per chat session to change how the AI responds. Choose from quick presets (Coding Assistant, Technical Writer, Creative Partner, Friendly Tutor) or create your own persona with specific tone, expertise level, and response style.
 
 ## Supported Providers

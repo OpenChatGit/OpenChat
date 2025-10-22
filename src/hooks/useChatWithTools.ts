@@ -30,7 +30,7 @@ export function useChatWithTools(pluginManager: PluginManager) {
   })
   
   // Load current session from localStorage on initial mount
-  const [currentSession, setCurrentSession] = useState<ChatSession | null>(() => {
+  const [currentSession, setCurrentSessionState] = useState<ChatSession | null>(() => {
     try {
       const saved = localStorage.getItem('current-session')
       return saved ? JSON.parse(saved) : null
@@ -39,6 +39,16 @@ export function useChatWithTools(pluginManager: PluginManager) {
       return null
     }
   })
+
+  // Wrapper for setCurrentSession that clears SourceRegistry when switching sessions
+  const setCurrentSession = useCallback((sessionOrUpdater: ChatSession | null | ((prev: ChatSession | null) => ChatSession | null)) => {
+    // Clear SourceRegistry when switching to a different session
+    const sourceRegistry = autoSearchManager.current.getOrchestrator().getSourceRegistry()
+    sourceRegistry.clear()
+    console.log('[useChatWithTools] SourceRegistry cleared for session switch')
+    
+    setCurrentSessionState(sessionOrUpdater)
+  }, [])
   
   const [isGenerating, setIsGenerating] = useState(false)
   const [autoSearchEnabled, setAutoSearchEnabled] = useState(false)
@@ -950,7 +960,7 @@ Format: {title}Your Title Here{/title}`
       
       updateMessage(session.id, assistantMessage.id, streamingContentRef.current)
       
-      // Calculate token usage after streaming completes
+      // Calculate token usage and citation metadata after streaming completes
       try {
         // Include the assistant's response in the token calculation
         const messagesWithResponse = [
@@ -967,7 +977,15 @@ Format: {title}Your Title Here{/title}`
           providerConfig.type
         )
         
-        // Update assistant message with token usage metadata
+        // Extract citation metadata from the assistant's response
+        const { CitationParser } = await import('../lib/citations/citationParser')
+        const citations = CitationParser.parse(streamingContentRef.current)
+        const citationMetadata = citations.length > 0 ? {
+          sourceIds: CitationParser.extractSourceIds(streamingContentRef.current),
+          citationCount: citations.length
+        } : undefined
+        
+        // Update assistant message with token usage and citation metadata
         setSessions(prev =>
           prev.map(s =>
             s.id === session.id
@@ -981,7 +999,8 @@ Format: {title}Your Title Here{/title}`
                             ...m.metadata,
                             tokenUsage,
                             model,
-                            provider: providerConfig.type
+                            provider: providerConfig.type,
+                            citations: citationMetadata
                           }
                         }
                       : m
@@ -1004,7 +1023,8 @@ Format: {title}Your Title Here{/title}`
                         ...m.metadata,
                         tokenUsage,
                         model,
-                        provider: providerConfig.type
+                        provider: providerConfig.type,
+                        citations: citationMetadata
                       }
                     }
                   : m
@@ -1015,6 +1035,9 @@ Format: {title}Your Title Here{/title}`
         })
         
         console.log('[Token Usage] Calculated tokens:', tokenUsage)
+        if (citationMetadata) {
+          console.log('[Citations] Extracted citation metadata:', citationMetadata)
+        }
       } catch (error) {
         console.warn('[Token Usage] Failed to calculate token usage:', error)
         // Gracefully handle error - token usage will remain undefined
@@ -1041,6 +1064,11 @@ Format: {title}Your Title Here{/title}`
     }
   }, [currentSession])
 
+  // Get SourceRegistry from the AutoSearchManager's orchestrator
+  const getSourceRegistry = useCallback(() => {
+    return autoSearchManager.current.getOrchestrator().getSourceRegistry()
+  }, [])
+
   return {
     sessions,
     currentSession,
@@ -1057,5 +1085,6 @@ Format: {title}Your Title Here{/title}`
     personaPrompt,
     personaEnabled,
     updatePersona,
+    getSourceRegistry,
   }
 }

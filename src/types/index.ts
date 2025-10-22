@@ -47,6 +47,10 @@ export interface Message {
       chunkCount: number;
       searchTime: number;
     };
+    citations?: {
+      sourceIds: number[];      // Array of source IDs that are cited in this message
+      citationCount: number;    // Total number of citations in this message
+    };
   };
 }
 

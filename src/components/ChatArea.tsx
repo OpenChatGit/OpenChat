@@ -5,6 +5,8 @@ import { ChatInput } from './ChatInput'
 import type { ChatSession, ProviderConfig, ModelInfo, ImageAttachment } from '../types'
 import type { RendererPlugin } from '../plugins/core'
 
+import type { SourceRegistry } from '../lib/web-search/sourceRegistry'
+
 interface ChatAreaProps {
   session: ChatSession | null
   isGenerating: boolean
@@ -23,6 +25,7 @@ interface ChatAreaProps {
   onToggleAutoSearch?: () => void
   onTogglePersonaSidebar?: () => void
   personaEnabled?: boolean
+  getSourceRegistry: () => SourceRegistry
 }
 
 export function ChatArea({ 
@@ -42,7 +45,8 @@ export function ChatArea({
   autoSearchEnabled = false,
   onToggleAutoSearch = () => {},
   onTogglePersonaSidebar,
-  personaEnabled = false
+  personaEnabled = false,
+  getSourceRegistry
 }: ChatAreaProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const [modelCapabilities, setModelCapabilities] = useState<ModelInfo['capabilities']>()
@@ -139,6 +143,7 @@ export function ChatArea({
                       message={message} 
                       rendererPlugins={rendererPlugins}
                       previousMessage={previousMessage}
+                      sourceRegistry={getSourceRegistry()}
                     />
                   )}
                 </div>

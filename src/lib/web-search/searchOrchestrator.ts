@@ -11,6 +11,7 @@
 
 import { searchEngineFactory } from './searchEngineFactory';
 import { BackendScraper } from './backendScraper';
+import { SourceRegistry } from './sourceRegistry';
 import type {
   SearchResult,
   ScrapedContent,
@@ -52,6 +53,7 @@ const DEFAULT_CONFIG: OrchestratorConfig = {
 export class SearchOrchestrator {
   private backendScraper: BackendScraper;
   private config: OrchestratorConfig;
+  private sourceRegistry: SourceRegistry;
   
   // Cache management
   private cache: Map<string, CacheEntry>;
@@ -68,6 +70,7 @@ export class SearchOrchestrator {
   constructor(config: Partial<OrchestratorConfig> = {}) {
     this.backendScraper = new BackendScraper();
     this.config = { ...DEFAULT_CONFIG, ...config };
+    this.sourceRegistry = new SourceRegistry();
     
     // Initialize cache
     this.cache = new Map();
@@ -147,6 +150,9 @@ export class SearchOrchestrator {
     const startTime = Date.now();
     
     try {
+      // Clear SourceRegistry when starting new search
+      this.sourceRegistry.clear();
+      
       this.stats.totalSearches++;
       
       // Execute search with retry logic using factory (automatic fallback)
@@ -197,7 +203,12 @@ export class SearchOrchestrator {
       }
 
       // Convert metadata format
-      return successful.map(content => this.convertScrapedContent(content));
+      const scrapedContent = successful.map(content => this.convertScrapedContent(content));
+
+      // Register sources in SourceRegistry after scraping
+      this.registerScrapedSources(scrapedContent);
+
+      return scrapedContent;
 
     } catch (error) {
       console.error('Scraping failed:', error);
@@ -224,6 +235,21 @@ export class SearchOrchestrator {
       content: content.content,
       metadata
     };
+  }
+
+  /**
+   * Register scraped sources in the SourceRegistry
+   * @param scrapedContent Array of scraped content to register
+   */
+  private registerScrapedSources(scrapedContent: ScrapedContent[]): void {
+    for (const content of scrapedContent) {
+      this.sourceRegistry.registerSource(
+        content.url,
+        content.title,
+        content.metadata.domain,
+        content.metadata.publishedDate
+      );
+    }
   }
 
   /**
@@ -449,6 +475,14 @@ export class SearchOrchestrator {
     this.searchTimes = [];
     this.cacheEvictions = 0;
     this.cacheExpiries = 0;
+  }
+
+  /**
+   * Get the SourceRegistry instance
+   * @returns The SourceRegistry instance
+   */
+  getSourceRegistry(): SourceRegistry {
+    return this.sourceRegistry;
   }
 
   // ============================================================================

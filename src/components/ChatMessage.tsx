@@ -8,14 +8,17 @@ import { faCheck, faTimes } from '@fortawesome/free-solid-svg-icons'
 import contentCopyIcon from '../assets/content_copy.svg'
 import infoIcon from '../assets/info_icon.svg'
 import refreshIcon from '../assets/refresh.svg'
+import { CitationParser } from '../lib/citations/citationParser'
+import type { SourceRegistry } from '../lib/web-search/sourceRegistry'
 
 interface ChatMessageProps {
   message: Message
   rendererPlugins?: RendererPlugin[]
   previousMessage?: Message // To access autoSearch metadata from previous user message
+  sourceRegistry?: SourceRegistry // Optional: For rendering citations
 }
 
-export function ChatMessage({ message, rendererPlugins = [], previousMessage }: ChatMessageProps) {
+export function ChatMessage({ message, rendererPlugins = [], previousMessage, sourceRegistry }: ChatMessageProps) {
   const isUser = message.role === 'user'
   const [isCopied, setIsCopied] = useState(false)
   const [lightboxImage, setLightboxImage] = useState<ImageAttachment | null>(null)
@@ -114,6 +117,91 @@ export function ChatMessage({ message, rendererPlugins = [], previousMessage }: 
     }
     
     return parts.length > 0 ? parts : []
+  }
+
+  // Render content with citations
+  const renderContentWithCitations = (content: string, renderer?: RendererPlugin) => {
+    // If no sourceRegistry, render normally without citations
+    if (!sourceRegistry) {
+      return renderer ? renderer.render(content) : (
+        <div 
+          className="text-base leading-relaxed"
+          style={{ 
+            color: 'var(--color-foreground)',
+            lineHeight: '1.75'
+          }}
+        >
+          {content.split('\n').map((line, i) => (
+            <p key={i} className={i > 0 ? 'mt-4' : ''}>
+              {line || '\u00A0'}
+            </p>
+          ))}
+        </div>
+      )
+    }
+
+    // Parse citations from content
+    const citations = CitationParser.parse(content)
+    
+    // If no citations found, render normally with full renderer support
+    if (citations.length === 0) {
+      return renderer ? renderer.render(content) : (
+        <div 
+          className="text-base leading-relaxed"
+          style={{ 
+            color: 'var(--color-foreground)',
+            lineHeight: '1.75'
+          }}
+        >
+          {content.split('\n').map((line, i) => (
+            <p key={i} className={i > 0 ? 'mt-4' : ''}>
+              {line || '\u00A0'}
+            </p>
+          ))}
+        </div>
+      )
+    }
+
+    // Pragmatic solution: Replace citations with simple [1] text
+    // They won't be clickable, but markdown will work and they'll be inline
+    // Users can click the favicons in "Searched Web" to see sources
+    
+    let processedContent = content
+    
+    // Sort citations by startIndex in reverse to maintain indices
+    const sortedCitations = [...citations].sort((a, b) => b.startIndex - a.startIndex)
+    
+    sortedCitations.forEach((citation) => {
+      // Replace with simple superscript text
+      const replacement = `[${citation.sourceId}]`
+      
+      processedContent = 
+        processedContent.substring(0, citation.startIndex) + 
+        replacement + 
+        processedContent.substring(citation.endIndex)
+    })
+    
+    // Render with markdown - citations appear as [1], [2] inline
+    if (renderer) {
+      return renderer.render(processedContent)
+    }
+    
+    // Fallback without renderer
+    return (
+      <div 
+        className="text-base leading-relaxed"
+        style={{ 
+          color: 'var(--color-foreground)',
+          lineHeight: '1.75'
+        }}
+      >
+        {processedContent.split('\n').map((line, i) => (
+          <p key={i} className={i > 0 ? 'mt-4' : ''}>
+            {line || '\u00A0'}
+          </p>
+        ))}
+      </div>
+    )
   }
 
   // Handle image loading states
@@ -330,15 +418,36 @@ export function ChatMessage({ message, rendererPlugins = [], previousMessage }: 
             </svg>
             <span>Searched Web</span>
             <div className="flex items-center gap-1">
-              {searchSources.slice(0, 5).map((source: any, idx: number) => (
-                <img
-                  key={idx}
-                  src={`https://www.google.com/s2/favicons?domain=${source.url}&sz=16`}
-                  alt={source.title}
-                  className="w-4 h-4 rounded-sm opacity-70"
-                  title={source.title}
-                />
-              ))}
+              {searchSources.slice(0, 5).map((source: any, idx: number) => {
+                const sourceId = sourceRegistry?.getSourceIdByUrl(source.url)
+                return (
+                  <button
+                    key={idx}
+                    onClick={() => {
+                      if (sourceId !== undefined) {
+                        // Dispatch event to highlight citations for this source
+                        window.dispatchEvent(new CustomEvent('highlightCitation', {
+                          detail: { sourceId }
+                        }))
+                        // Clear highlight after 3 seconds
+                        setTimeout(() => {
+                          window.dispatchEvent(new CustomEvent('highlightCitation', {
+                            detail: { sourceId: null }
+                          }))
+                        }, 3000)
+                      }
+                    }}
+                    className="hover:opacity-100 transition-opacity cursor-pointer"
+                    title={`${source.title} - Click to highlight citations`}
+                  >
+                    <img
+                      src={`https://www.google.com/s2/favicons?domain=${source.url}&sz=16`}
+                      alt={source.title}
+                      className="w-4 h-4 rounded-sm opacity-70"
+                    />
+                  </button>
+                )
+              })}
             </div>
           </div>
         )}
@@ -407,7 +516,9 @@ export function ChatMessage({ message, rendererPlugins = [], previousMessage }: 
                   if (!textContent) return null
                   
                   return renderer ? (
-                    <div key={index} className="markdown-content">{renderer.render(textContent)}</div>
+                    <div key={index} className="markdown-content">
+                      {renderContentWithCitations(textContent, renderer)}
+                    </div>
                   ) : (
                     <div 
                       key={index} 
@@ -417,11 +528,7 @@ export function ChatMessage({ message, rendererPlugins = [], previousMessage }: 
                         lineHeight: '1.75'
                       }}
                     >
-                      {textContent.split('\n').map((line, i) => (
-                        <p key={i} className={i > 0 ? 'mt-4' : ''}>
-                          {line || '\u00A0'}
-                        </p>
-                      ))}
+                      {renderContentWithCitations(textContent)}
                     </div>
                   )
                 })}
