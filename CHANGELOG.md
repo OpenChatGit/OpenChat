@@ -39,5 +39,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Custom persona/system prompts
 - Token usage tracking and display
 - Dark mode UI with responsive design
-
-8
