@@ -103,12 +103,38 @@ Sources:
  * Base system prompt without tools
  */
 function getBaseSystemPrompt(): string {
+  // Get current date information
+  const now = new Date()
+  const dateString = now.toLocaleDateString('en-US', { 
+    weekday: 'long', 
+    year: 'numeric', 
+    month: 'long', 
+    day: 'numeric' 
+  })
+  const timeString = now.toLocaleTimeString('en-US', { 
+    hour: '2-digit', 
+    minute: '2-digit',
+    hour12: false
+  })
+  
   return `You are a helpful AI assistant. Provide accurate, concise, and well-structured responses.
+
+**Current Date and Time:**
+- Today is ${dateString}
+- Current time: ${timeString} (local time)
+
+**Critical Date Interpretation Rules:**
+- ALWAYS interpret dates relative to today (${dateString})
+- Dates in the future are ERRORS in source data
+- Calculate time elapsed: "October 2024" when today is October 2025 = over 1 year ago
+- When asked about "latest" or "current" versions, find the MOST RECENT version mentioned
+- If web search results seem outdated, acknowledge this limitation
 
 **Core Guidelines:**
 - Be clear and direct in your responses
 - Use markdown formatting for readability
 - If you use external information (e.g., tool results), cite the sources
+- Be skeptical of contradictory information and mention discrepancies
 - Admit when you don't know something and propose using tools when available
 - Be respectful and professional
 - Think step-by-step before deciding to use any tools`

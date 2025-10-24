@@ -293,6 +293,7 @@ export class AutoSearchManager {
   /**
    * Extract optimized search query from user input
    * Removes stopwords and extracts key terms
+   * Adds recency keywords for version/release queries
    */
   extractSearchQuery(query: string): string {
     const normalizedQuery = query.toLowerCase().trim();
@@ -337,8 +338,46 @@ export class AutoSearchManager {
       return query.trim();
     }
 
+    // Get current date information
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.toLocaleDateString('en-US', { month: 'long' });
+    
+    // Detect if query already has a year
+    const hasYearInQuery = importantWords.some(w => /^\d{4}$/.test(w));
+    
+    // Detect version/release/current information queries
+    const versionKeywords = ['version', 'release', 'latest', 'current', 'newest', 'aktuell', 'neueste', 'update'];
+    const hasVersionKeyword = versionKeywords.some(kw => 
+      importantWords.some(word => word.includes(kw))
+    );
+    
+    // Detect time-sensitive queries (news, events, etc.)
+    const timeSensitiveKeywords = ['news', 'today', 'recent', 'now', 'currently', 'heute', 'aktuell', 'jetzt'];
+    const isTimeSensitive = timeSensitiveKeywords.some(kw =>
+      importantWords.some(word => word.includes(kw))
+    );
+    
+    // Add temporal context to improve search results
+    if (!hasYearInQuery) {
+      if (hasVersionKeyword) {
+        // For version queries, add year and month for maximum recency
+        importantWords.push(currentYear.toString());
+        importantWords.push(currentMonth);
+        console.log(`[AutoSearch] Added temporal context for version query: ${currentYear} ${currentMonth}`);
+      } else if (isTimeSensitive) {
+        // For time-sensitive queries, add year
+        importantWords.push(currentYear.toString());
+        console.log(`[AutoSearch] Added temporal context for time-sensitive query: ${currentYear}`);
+      }
+    }
+
     // Join words back together
-    return importantWords.join(' ');
+    const optimizedQuery = importantWords.join(' ');
+    
+    console.log(`[AutoSearch] Query optimization: "${query}" → "${optimizedQuery}"`);
+    
+    return optimizedQuery;
   }
 
   /**
@@ -714,18 +753,50 @@ export class AutoSearchManager {
   private buildSystemPrompt(context: SearchContext): string {
     const sourceCount = context.sources.length;
     const chunkCount = context.chunks.length;
+    
+    // Get current date for context
+    const now = new Date();
+    const dateString = now.toLocaleDateString('en-US', { 
+      weekday: 'long', 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    });
 
     return `📊 WEB SEARCH CONTEXT
 
 I have searched the web and found current information from ${sourceCount} reliable source(s) to help answer your question.
 Below are ${chunkCount} relevant section(s) that were selected based on their relevance to: "${context.query}"
 
-IMPORTANT INSTRUCTIONS:
-- Use the information provided below to give an accurate, up-to-date answer
-- Cite specific sources when making claims (e.g., "According to python.org...")
-- If the information contradicts your training data, prioritize the web search results as they are more current
-- If the search results don't fully answer the question, acknowledge what information is available and what is missing
-- Present the information in a clear, well-structured way`;
+CURRENT DATE: ${dateString}
+
+CRITICAL INSTRUCTIONS FOR INTERPRETING WEB SEARCH RESULTS:
+
+1. **Date Awareness**: Today is ${dateString}. Any dates in the search results must be interpreted relative to this date.
+
+2. **Version/Release Information**: 
+   - If the user asks about "latest" or "current" version, look for the MOST RECENT version number mentioned
+   - Ignore older versions unless specifically asked about version history
+   - If multiple versions are mentioned, clearly identify which is the latest
+
+3. **Temporal Logic**:
+   - Dates in the future are ERRORS in the source data
+   - "Released October 2024" when today is October 2025 means it was released OVER A YEAR AGO
+   - Always calculate how long ago something happened relative to today
+
+4. **Source Quality**:
+   - Prioritize official documentation and release pages
+   - Be skeptical of outdated cached content
+   - If sources contradict each other, mention the discrepancy and cite both
+
+5. **Transparency**:
+   - If the search results seem outdated or incomplete, SAY SO
+   - If you can't find the latest information, acknowledge this limitation
+   - Cite specific sources when making claims (e.g., "According to python.org...")
+
+6. **Presentation**:
+   - Present the information in a clear, well-structured way
+   - If the search results don't fully answer the question, acknowledge what information is available and what is missing`;
   }
 }
 
