@@ -4,8 +4,8 @@ import { ChatMessage } from './ChatMessage'
 import { ChatInput } from './ChatInput'
 import type { ChatSession, ProviderConfig, ModelInfo, ImageAttachment } from '../types'
 import type { RendererPlugin } from '../plugins/core'
-
 import type { SourceRegistry } from '../lib/web-search/sourceRegistry'
+import { PluginHookRenderer } from './PluginHookRenderer'
 
 interface ChatAreaProps {
   session: ChatSession | null
@@ -94,35 +94,41 @@ export function ChatArea({
     <div className="flex flex-col h-full">
       {/* Messages */}
       <div className="flex-1 overflow-y-auto relative">
-        {/* Floating Persona Button */}
-        {session && onTogglePersonaSidebar && (
-          <div className="absolute top-4 right-4 z-10">
-            <button
-              onClick={onTogglePersonaSidebar}
-              className={`relative p-2 rounded-lg transition-all duration-200 hover:scale-105 shadow-lg ${
-                personaEnabled ? 'ring-2 ring-green-400/30' : ''
-              }`}
-              style={{
-                backgroundColor: personaEnabled ? 'var(--color-accent)' : 'var(--color-sidebar)',
-                color: personaEnabled ? 'white' : 'var(--color-foreground)',
-                opacity: personaEnabled ? 1 : 0.8
-              }}
-              title={personaEnabled ? "Persona Active - Click to configure" : "Persona Settings"}
-              aria-label="Persona Settings"
-            >
-              <User size={20} />
-              {personaEnabled && (
-                <>
-                  <span 
-                    className="absolute top-0.5 right-0.5 w-2.5 h-2.5 rounded-full bg-green-400 border-2 border-white shadow-sm animate-pulse"
-                  />
-                  {/* Subtle glow effect */}
-                  <span 
-                    className="absolute top-0.5 right-0.5 w-2.5 h-2.5 rounded-full bg-green-400 blur-sm opacity-50"
-                  />
-                </>
-              )}
-            </button>
+        {/* Floating Toolbar Area */}
+        {session && (
+          <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
+            {/* Plugin hooks: Add toolbar buttons */}
+            <PluginHookRenderer hookType="ui.toolbar" />
+            
+            {/* Floating Persona Button */}
+            {onTogglePersonaSidebar && (
+              <button
+                onClick={onTogglePersonaSidebar}
+                className={`relative p-2 rounded-lg transition-all duration-200 hover:scale-105 shadow-lg ${
+                  personaEnabled ? 'ring-2 ring-green-400/30' : ''
+                }`}
+                style={{
+                  backgroundColor: personaEnabled ? 'var(--color-accent)' : 'var(--color-sidebar)',
+                  color: personaEnabled ? 'white' : 'var(--color-foreground)',
+                  opacity: personaEnabled ? 1 : 0.8
+                }}
+                title={personaEnabled ? "Persona Active - Click to configure" : "Persona Settings"}
+                aria-label="Persona Settings"
+              >
+                <User size={20} />
+                {personaEnabled && (
+                  <>
+                    <span 
+                      className="absolute top-0.5 right-0.5 w-2.5 h-2.5 rounded-full bg-green-400 border-2 border-white shadow-sm animate-pulse"
+                    />
+                    {/* Subtle glow effect */}
+                    <span 
+                      className="absolute top-0.5 right-0.5 w-2.5 h-2.5 rounded-full bg-green-400 blur-sm opacity-50"
+                    />
+                  </>
+                )}
+              </button>
+            )}
           </div>
         )}
         {session.messages.length === 0 ? (

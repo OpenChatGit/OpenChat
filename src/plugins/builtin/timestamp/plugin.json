@@ -1,0 +1,40 @@
+{
+  "id": "timestamp-plugin",
+  "name": "Message Timestamp",
+  "version": "1.0.0",
+  "description": "Shows timestamps under user messages",
+  "author": "OpenChat",
+  "type": "ui-extension",
+  "appVersion": "1.0.0",
+  "core": false,
+  "config": {
+    "format": {
+      "type": "select",
+      "label": "Time Format",
+      "description": "Choose how timestamps are displayed",
+      "default": "12h",
+      "options": ["12h", "24h", "relative"]
+    },
+    "showDate": {
+      "type": "boolean",
+      "label": "Show Date",
+      "description": "Display the date along with the time",
+      "default": true
+    },
+    "fontSize": {
+      "type": "number",
+      "label": "Font Size",
+      "description": "Size of the timestamp text in pixels",
+      "default": 12,
+      "min": 8,
+      "max": 20,
+      "step": 1
+    },
+    "customPrefix": {
+      "type": "string",
+      "label": "Custom Prefix",
+      "description": "Text to show before the timestamp",
+      "default": "Sent at"
+    }
+  }
+}

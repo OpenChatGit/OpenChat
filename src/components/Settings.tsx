@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Check, AlertCircle, RefreshCw } from 'lucide-react'
 import { Button } from './ui/Button'
 import { Input } from './ui/Input'
+import { Checkbox } from './ui/Checkbox'
 import type { ProviderConfig, ModelInfo } from '../types'
 import { cn } from '../lib/utils'
 
@@ -296,20 +297,19 @@ export function Settings({
                 const isHidden = hiddenModels.includes(model.name)
                 
                 return (
-                  <label
+                  <div
                     key={model.name}
                     className={cn(
-                      "flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-all",
+                      "flex items-start gap-3 p-3 border rounded-lg transition-all",
                       isHidden 
                         ? "border-border bg-muted/30 opacity-60" 
                         : "border-primary/30 bg-primary/5 hover:bg-primary/10"
                     )}
                   >
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       checked={!isHidden}
-                      onChange={(e) => {
-                        const newHiddenModels = e.target.checked
+                      onChange={(checked) => {
+                        const newHiddenModels = checked
                           ? hiddenModels.filter(m => m !== model.name)
                           : [...hiddenModels, model.name]
                         
@@ -319,7 +319,6 @@ export function Settings({
                         }
                         onUpdateProvider(updatedProvider)
                       }}
-                      className="w-5 h-5 rounded border-gray-300"
                     />
                     <div className="flex-1">
                       <div className="font-medium flex items-center gap-2">
@@ -341,7 +340,7 @@ export function Settings({
                         </div>
                       )}
                     </div>
-                  </label>
+                  </div>
                 )
               })}
             </div>

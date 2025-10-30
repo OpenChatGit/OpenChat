@@ -1,0 +1,11 @@
+{
+  "id": "message-export",
+  "name": "Message Export",
+  "version": "1.0.0",
+  "description": "Export chat sessions to JSON, Markdown, or plain text",
+  "author": "OpenChat",
+  "type": "tool",
+  "appVersion": "1.0.0",
+  "core": false,
+  "permissions": ["filesystem"]
+}

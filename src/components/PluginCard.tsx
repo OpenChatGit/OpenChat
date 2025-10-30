@@ -2,14 +2,16 @@ import { useState } from 'react'
 import { Settings, RefreshCw, Trash2, ExternalLink } from 'lucide-react'
 import type { PluginMetadata } from '../plugins/core'
 import { cn } from '../lib/utils'
+import { Toggle } from './ui/Toggle'
 
-interface PluginCardProps {
+export interface PluginCardProps {
   plugin: PluginMetadata
   onEnable: (pluginId: string) => void
   onDisable: (pluginId: string) => void
   onConfigure?: (pluginId: string) => void
   onReload?: (pluginId: string) => void
   onUninstall?: (pluginId: string) => void
+  isReloading?: boolean
 }
 
 export function PluginCard({
@@ -18,7 +20,8 @@ export function PluginCard({
   onDisable,
   onConfigure,
   onReload,
-  onUninstall
+  onUninstall,
+  isReloading = false
 }: PluginCardProps) {
   const [isToggling, setIsToggling] = useState(false)
 
@@ -77,23 +80,14 @@ export function PluginCard({
         </div>
 
         {/* Toggle Switch */}
-        <button
-          onClick={handleToggle}
-          disabled={isToggling || plugin.core}
-          className={cn(
-            'relative inline-flex h-5 w-9 items-center rounded-full transition-colors flex-shrink-0',
-            plugin.enabled ? 'bg-white' : 'bg-gray-600',
-            (isToggling || plugin.core) && 'opacity-50 cursor-not-allowed'
-          )}
-          title={plugin.core ? 'Core plugins cannot be disabled' : plugin.enabled ? 'Disable' : 'Enable'}
-        >
-          <span
-            className={cn(
-              'inline-block h-4 w-4 transform rounded-full transition-transform',
-              plugin.enabled ? 'bg-black translate-x-5' : 'bg-white translate-x-0.5'
-            )}
+        <div title={plugin.core ? 'Core plugins cannot be disabled' : plugin.enabled ? 'Disable' : 'Enable'}>
+          <Toggle
+            checked={plugin.enabled}
+            onChange={handleToggle}
+            disabled={isToggling || plugin.core}
+            size="sm"
           />
-        </button>
+        </div>
       </div>
 
       {/* Tags */}
@@ -159,10 +153,11 @@ export function PluginCard({
         {onReload && !plugin.isBuiltin && (
           <button
             onClick={() => onReload(plugin.id)}
-            className="p-1.5 rounded hover:bg-white/10 transition-colors"
-            title="Reload Plugin"
+            className="p-1.5 rounded hover:bg-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            title={isReloading ? "Reloading..." : "Reload Plugin"}
+            disabled={isReloading}
           >
-            <RefreshCw className="w-3.5 h-3.5" />
+            <RefreshCw className={cn("w-3.5 h-3.5", isReloading && "animate-spin")} />
           </button>
         )}
 

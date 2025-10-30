@@ -12,6 +12,7 @@ import type { SearchContext } from '../lib/web-search/types'
 import type { WebSearchSettings } from '../components/WebSearchSettings'
 import { loadWebSearchSettings, saveWebSearchSettings } from '../lib/web-search/settingsStorage'
 import { Tokenizer } from '../lib/tokenizer'
+import { debugPersonaState, logPersonaDebug, isPersonaDebugEnabled } from '../lib/personaDebug'
 
 // Global system prompt constant
 // This can be customized in the future to allow user-defined global prompts
@@ -695,8 +696,24 @@ Format: {title}Your Title Here{/title}`
     const session = targetSession || currentSession
     if (!session) return
 
+    // Process message through plugins (processOutgoing)
+    let processedContent = content
+    try {
+      const messageProcessors = pluginManager.getByType('message-processor')
+      for (const processor of messageProcessors) {
+        if (processor.metadata.enabled && typeof (processor as any).processOutgoing === 'function') {
+          const result = await (processor as any).processOutgoing(processedContent)
+          if (typeof result === 'string') {
+            processedContent = result
+          }
+        }
+      }
+    } catch (error) {
+      console.error('[useChatWithTools] Error processing outgoing message:', error)
+    }
+
     // Check if user message already exists
-    const hasUserMessage = session.messages.some(m => m.role === 'user' && m.content === content)
+    const hasUserMessage = session.messages.some(m => m.role === 'user' && m.content === processedContent)
     
     let userMessage: Message
     
@@ -704,14 +721,14 @@ Format: {title}Your Title Here{/title}`
       userMessage = {
         id: generateId(),
         role: 'user',
-        content,
+        content: processedContent,
         timestamp: Date.now(),
         images: images && images.length > 0 ? images : undefined,
         metadata: {}
       }
       addMessage(session.id, userMessage)
     } else {
-      userMessage = session.messages.find(m => m.role === 'user' && m.content === content)!
+      userMessage = session.messages.find(m => m.role === 'user' && m.content === processedContent)!
     }
 
     // Auto-generate title from first message
@@ -866,11 +883,34 @@ Format: {title}Your Title Here{/title}`
       let messages: Array<{ role: "user" | "assistant" | "system"; content: string; images?: ImageAttachment[] }> = []
       
       // Combine system prompts and add as first message
+      // IMPORTANT: Use session's persona settings, not local state
+      const sessionPersonaPrompt = session.personaPrompt || ''
+      const sessionPersonaEnabled = session.personaEnabled || false
+      
       const combinedSystemPrompt = combineSystemPrompts(
         GLOBAL_SYSTEM_PROMPT,
-        personaPrompt,
-        personaEnabled
+        sessionPersonaPrompt,
+        sessionPersonaEnabled
       )
+      
+      // Debug logging for persona
+      if (isPersonaDebugEnabled()) {
+        const debugInfo = debugPersonaState(
+          session.id,
+          session.personaPrompt,
+          session.personaEnabled,
+          personaPrompt,
+          personaEnabled
+        )
+        logPersonaDebug(debugInfo)
+      }
+      
+      console.log('[useChatWithTools] Using persona from session:', {
+        sessionId: session.id,
+        personaEnabled: sessionPersonaEnabled,
+        promptLength: sessionPersonaPrompt.length,
+        combinedPromptLength: combinedSystemPrompt.length
+      })
       
       // Add system message only if not already present in previous messages
       const hasSystemMessage = previousMessages.some(m => m.role === 'system')
@@ -958,7 +998,23 @@ Format: {title}Your Title Here{/title}`
         await new Promise(resolve => setTimeout(resolve, 10))
       }
       
-      updateMessage(session.id, assistantMessage.id, streamingContentRef.current)
+      // Process AI response through plugins (processIncoming)
+      let processedResponse = streamingContentRef.current
+      try {
+        const messageProcessors = pluginManager.getByType('message-processor')
+        for (const processor of messageProcessors) {
+          if (processor.metadata.enabled && typeof (processor as any).processIncoming === 'function') {
+            const result = await (processor as any).processIncoming(processedResponse)
+            if (typeof result === 'string') {
+              processedResponse = result
+            }
+          }
+        }
+      } catch (error) {
+        console.error('[useChatWithTools] Error processing incoming message:', error)
+      }
+      
+      updateMessage(session.id, assistantMessage.id, processedResponse)
       
       // Calculate token usage and citation metadata after streaming completes
       try {
@@ -967,7 +1023,7 @@ Format: {title}Your Title Here{/title}`
           ...messages,
           {
             role: 'assistant' as const,
-            content: streamingContentRef.current
+            content: processedResponse
           }
         ]
         
@@ -979,9 +1035,9 @@ Format: {title}Your Title Here{/title}`
         
         // Extract citation metadata from the assistant's response
         const { CitationParser } = await import('../lib/citations/citationParser')
-        const citations = CitationParser.parse(streamingContentRef.current)
+        const citations = CitationParser.parse(processedResponse)
         const citationMetadata = citations.length > 0 ? {
-          sourceIds: CitationParser.extractSourceIds(streamingContentRef.current),
+          sourceIds: CitationParser.extractSourceIds(processedResponse),
           citationCount: citations.length
         } : undefined
         

@@ -1,36 +1,64 @@
-// Reusable Toggle Switch Component with better visibility
+// Modern Toggle Switch Component with smooth animations and better visibility
 interface ToggleProps {
   checked: boolean
   onChange: (checked: boolean) => void
   disabled?: boolean
+  size?: 'sm' | 'md' | 'lg'
 }
 
-export function Toggle({ checked, onChange, disabled = false }: ToggleProps) {
+export function Toggle({ checked, onChange, disabled = false, size = 'md' }: ToggleProps) {
+  // Size configurations
+  const sizes = {
+    sm: {
+      track: 'w-9 h-5',
+      thumb: 'w-4 h-4',
+      thumbOffset: 'left-0.5',
+      translate: 'translate-x-4'
+    },
+    md: {
+      track: 'w-11 h-6',
+      thumb: 'w-5 h-5',
+      thumbOffset: 'left-0.5',
+      translate: 'translate-x-5'
+    },
+    lg: {
+      track: 'w-14 h-7',
+      thumb: 'w-6 h-6',
+      thumbOffset: 'left-0.5',
+      translate: 'translate-x-7'
+    }
+  }
+
+  const sizeConfig = sizes[size]
+
   return (
-    <label className="relative inline-flex items-center cursor-pointer">
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-        disabled={disabled}
-        className="sr-only peer"
-      />
-      <div 
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      disabled={disabled}
+      onClick={() => !disabled && onChange(!checked)}
+      className={`
+        relative inline-flex items-center ${sizeConfig.track} rounded-full
+        transition-all duration-300 ease-in-out
+        focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-offset-transparent
+        ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
+        ${checked 
+          ? 'bg-green-500 focus:ring-green-500/50' 
+          : 'bg-gray-600 dark:bg-gray-700 focus:ring-gray-500/50'
+        }
+      `}
+    >
+      {/* Thumb */}
+      <span
         className={`
-          w-11 h-6 rounded-full peer 
-          transition-all duration-200
-          peer-focus:outline-none peer-focus:ring-4 
-          after:content-[''] after:absolute after:top-[2px] after:left-[2px] 
-          after:rounded-full after:h-5 after:w-5 
-          after:transition-all after:shadow-md
-          peer-checked:after:translate-x-full
-          peer-disabled:opacity-50 peer-disabled:cursor-not-allowed
-          ${checked 
-            ? 'bg-green-500 peer-focus:ring-green-500/20 after:bg-white' 
-            : 'bg-gray-600 dark:bg-gray-700 peer-focus:ring-gray-500/20 after:bg-white'
-          }
+          ${sizeConfig.thumb} ${sizeConfig.thumbOffset} rounded-full
+          bg-white shadow-md
+          absolute top-0.5
+          transform transition-all duration-300 ease-in-out
+          ${checked ? sizeConfig.translate : 'translate-x-0'}
         `}
       />
-    </label>
+    </button>
   )
 }

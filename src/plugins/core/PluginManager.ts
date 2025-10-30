@@ -8,6 +8,7 @@
 import { EventBus } from './EventBus'
 import { PluginLoader } from './PluginLoader'
 import { PluginSecurity } from './PluginSecurity'
+import { pluginHooks } from './PluginHooks'
 import type {
   BasePlugin,
   PluginContext,
@@ -41,6 +42,9 @@ export class PluginManager {
     this.loader = new PluginLoader()
     this.security = new PluginSecurity()
     this.context = this.createContext()
+    
+    // Load plugin state from localStorage on startup
+    this.loadPluginState()
   }
 
   /**
@@ -124,6 +128,9 @@ export class PluginManager {
 
   /**
    * Register a plugin
+   * 
+   * This method now uses PluginExecutor for plugin instantiation
+   * and integrates with the new PluginLoader system.
    */
   async register(plugin: BasePlugin): Promise<void> {
     const { id } = plugin.metadata
@@ -162,6 +169,12 @@ export class PluginManager {
       }
     }
 
+    // Load saved plugin state (enabled/disabled)
+    const savedState = this.getSavedPluginState(id)
+    if (savedState !== undefined) {
+      plugin.metadata.enabled = savedState
+    }
+
     // Store plugin
     this.plugins.set(id, plugin)
     plugin.metadata.loaded = true
@@ -198,6 +211,9 @@ export class PluginManager {
     // Enable if not disabled
     if (plugin.metadata.enabled) {
       await this.enable(id)
+    } else {
+      // If disabled, ensure all hooks are disabled
+      this.disablePluginHooks(id)
     }
 
     console.log(`✓ Plugin registered: ${plugin.metadata.name} v${plugin.metadata.version}`)
@@ -236,6 +252,9 @@ export class PluginManager {
 
   /**
    * Enable a plugin
+   * 
+   * When a plugin is enabled, all its hooks are also enabled.
+   * State is persisted to localStorage.
    */
   async enable(pluginId: string): Promise<void> {
     const plugin = this.plugins.get(pluginId)
@@ -246,7 +265,13 @@ export class PluginManager {
         await plugin.onEnable()
       }
       plugin.metadata.enabled = true
+      
+      // Enable all hooks for this plugin
+      this.enablePluginHooks(pluginId)
+      
+      // Save state to localStorage
       this.savePluginState()
+      
       console.log(`✓ Plugin enabled: ${plugin.metadata.name}`)
     } catch (error) {
       plugin.metadata.error = `Failed to enable: ${error}`
@@ -257,6 +282,9 @@ export class PluginManager {
 
   /**
    * Disable a plugin
+   * 
+   * When a plugin is disabled, all its hooks are also disabled.
+   * State is persisted to localStorage.
    */
   async disable(pluginId: string): Promise<void> {
     const plugin = this.plugins.get(pluginId)
@@ -272,7 +300,13 @@ export class PluginManager {
         await plugin.onDisable()
       }
       plugin.metadata.enabled = false
+      
+      // Disable all hooks for this plugin
+      this.disablePluginHooks(pluginId)
+      
+      // Save state to localStorage
       this.savePluginState()
+      
       console.log(`✓ Plugin disabled: ${plugin.metadata.name}`)
     } catch (error) {
       console.error(`Plugin ${pluginId} failed to disable:`, error)
@@ -282,33 +316,11 @@ export class PluginManager {
 
   /**
    * Reload a plugin (hot reload for external plugins)
+   * 
+   * Alias for reloadPlugin() for backward compatibility.
    */
   async reload(pluginId: string): Promise<void> {
-    const plugin = this.plugins.get(pluginId)
-    if (!plugin) {
-      throw new Error(`Plugin not found: ${pluginId}`)
-    }
-
-    // Only external plugins can be reloaded
-    if (plugin.metadata.isBuiltin) {
-      throw new Error(`Cannot reload built-in plugin: ${pluginId}`)
-    }
-
-    // TODO: Preserve state for reload
-    // const wasEnabled = plugin.metadata.enabled
-    // const config = this.getPluginConfig(pluginId)
-
-    // Unregister old instance
-    await this.unregister(pluginId)
-
-    // Clear loader cache
-    this.loader.clearCache(plugin.metadata.folderPath)
-
-    // TODO: Re-import plugin module
-    // This would require dynamic import which needs to be implemented
-    // based on how external plugins are loaded
-
-    console.log(`✓ Plugin reloaded: ${plugin.metadata.name}`)
+    return this.reloadPlugin(pluginId)
   }
 
   /**
@@ -485,7 +497,9 @@ export class PluginManager {
   }
 
   /**
-   * Save plugin enabled/disabled state
+   * Save plugin enabled/disabled state to localStorage
+   * 
+   * This persists the state across app restarts.
    */
   private savePluginState(): void {
     const state: Record<string, boolean> = {}
@@ -493,12 +507,15 @@ export class PluginManager {
       state[id] = plugin.metadata.enabled
     })
     localStorage.setItem('oc.plugin.state', JSON.stringify(state))
+    console.log('[PluginManager] Plugin state saved to localStorage')
   }
 
   /**
-   * Load plugin enabled/disabled state
+   * Load plugin enabled/disabled state from localStorage
+   * 
+   * Called on startup to restore plugin states.
    */
-  loadPluginState(): void {
+  private loadPluginState(): void {
     const stored = localStorage.getItem('oc.plugin.state')
     if (!stored) return
 
@@ -507,11 +524,71 @@ export class PluginManager {
       this.plugins.forEach((plugin, id) => {
         if (id in state) {
           plugin.metadata.enabled = state[id]
+          
+          // Sync hook state with plugin state
+          if (state[id]) {
+            this.enablePluginHooks(id)
+          } else {
+            this.disablePluginHooks(id)
+          }
         }
       })
+      console.log('[PluginManager] Plugin state loaded from localStorage')
     } catch (error) {
       console.error('Failed to load plugin state:', error)
     }
+  }
+
+  /**
+   * Get saved plugin state for a specific plugin
+   * 
+   * Returns undefined if no saved state exists.
+   */
+  private getSavedPluginState(pluginId: string): boolean | undefined {
+    const stored = localStorage.getItem('oc.plugin.state')
+    if (!stored) return undefined
+
+    try {
+      const state = JSON.parse(stored) as Record<string, boolean>
+      return state[pluginId]
+    } catch (error) {
+      console.error('Failed to get saved plugin state:', error)
+      return undefined
+    }
+  }
+
+  /**
+   * Enable all hooks for a plugin
+   * 
+   * This synchronizes hook state with plugin enabled state.
+   */
+  private enablePluginHooks(pluginId: string): void {
+    const hooks = pluginHooks.getAll()
+    for (const [_hookType, registrations] of hooks.entries()) {
+      for (const registration of registrations) {
+        if (registration.pluginId === pluginId) {
+          registration.enabled = true
+        }
+      }
+    }
+    console.log(`[PluginManager] Enabled all hooks for plugin: ${pluginId}`)
+  }
+
+  /**
+   * Disable all hooks for a plugin
+   * 
+   * This synchronizes hook state with plugin disabled state.
+   */
+  private disablePluginHooks(pluginId: string): void {
+    const hooks = pluginHooks.getAll()
+    for (const [_hookType, registrations] of hooks.entries()) {
+      for (const registration of registrations) {
+        if (registration.pluginId === pluginId) {
+          registration.enabled = false
+        }
+      }
+    }
+    console.log(`[PluginManager] Disabled all hooks for plugin: ${pluginId}`)
   }
 
   /**
@@ -533,5 +610,290 @@ export class PluginManager {
    */
   getLoader(): PluginLoader {
     return this.loader
+  }
+
+  /**
+   * Create a template plugin in the plugins directory
+   * 
+   * Generates a basic plugin structure with plugin.json and index.ts
+   * to help users get started quickly.
+   */
+  async createTemplatePlugin(pluginName: string): Promise<void> {
+    try {
+      // Validate plugin name
+      if (!pluginName || pluginName.trim() === '') {
+        throw new Error('Plugin name cannot be empty')
+      }
+
+      // Convert to kebab-case for ID
+      const pluginId = pluginName
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '')
+
+      if (!pluginId) {
+        throw new Error('Invalid plugin name')
+      }
+
+      // Check if we're in Tauri
+      if (typeof window !== 'undefined' && '__TAURI__' in window) {
+        const { writeTextFile, mkdir, exists } = await import('@tauri-apps/plugin-fs')
+        const { join } = await import('@tauri-apps/api/path')
+        
+        // Get plugins directory
+        const { getPluginsDirectory } = await import('../../services/externalPluginLoader')
+        const pluginsDir = await getPluginsDirectory()
+        
+        // Create plugin directory
+        const pluginDir = await join(pluginsDir, pluginId)
+        const dirExists = await exists(pluginDir)
+        
+        if (dirExists) {
+          throw new Error(`Plugin "${pluginId}" already exists`)
+        }
+        
+        await mkdir(pluginDir, { recursive: true })
+        
+        // Create plugin.json
+        const manifest = {
+          id: pluginId,
+          name: pluginName,
+          version: '1.0.0',
+          description: `${pluginName} plugin for OpenChat`,
+          author: 'Your Name',
+          type: 'message-processor',
+          appVersion: '>=0.5.0'
+        }
+        
+        const manifestPath = await join(pluginDir, 'plugin.json')
+        await writeTextFile(manifestPath, JSON.stringify(manifest, null, 2))
+        
+        // Create index.ts with template code
+        const templateCode = `/**
+ * ${pluginName} Plugin
+ * 
+ * ${manifest.description}
+ */
+
+// The pluginAPI object is globally available - no imports needed!
+declare const pluginAPI: any
+
+class ${pluginName.replace(/[^a-zA-Z0-9]/g, '')}Plugin {
+  /**
+   * Called when the plugin is loaded
+   */
+  onLoad(): void {
+    console.log('${pluginName} loaded!')
+    
+    // Show a notification
+    pluginAPI.ui.showNotification('${pluginName} is active!', 'success')
+    
+    // Register a hook to modify user messages
+    pluginAPI.hooks.register('message.render.user', (context: any) => {
+      // Example: Add a prefix to user messages
+      // context.content = '👤 ' + context.content
+      
+      // Always return the context
+      return context
+    })
+    
+    // Register a hook to modify assistant messages
+    pluginAPI.hooks.register('message.render.assistant', (context: any) => {
+      // Example: Add a prefix to assistant messages
+      // context.content = '🤖 ' + context.content
+      
+      // Always return the context
+      return context
+    })
+  }
+  
+  /**
+   * Called when the plugin is unloaded
+   */
+  onUnload(): void {
+    console.log('${pluginName} unloaded!')
+    
+    // Clean up: unregister hooks
+    pluginAPI.hooks.unregister('message.render.user')
+    pluginAPI.hooks.unregister('message.render.assistant')
+  }
+  
+  /**
+   * Called when the plugin is enabled
+   */
+  onEnable(): void {
+    console.log('${pluginName} enabled!')
+  }
+  
+  /**
+   * Called when the plugin is disabled
+   */
+  onDisable(): void {
+    console.log('${pluginName} disabled!')
+  }
+  
+  /**
+   * Called when plugin configuration changes
+   */
+  onConfigChange(config: any): void {
+    console.log('${pluginName} config changed:', config)
+  }
+}
+
+// Export the plugin class
+export default ${pluginName.replace(/[^a-zA-Z0-9]/g, '')}Plugin
+`
+        
+        const codePath = await join(pluginDir, 'index.ts')
+        await writeTextFile(codePath, templateCode)
+        
+        // Create README.md
+        const readme = `# ${pluginName}
+
+${manifest.description}
+
+## Features
+
+- Modifies user messages
+- Modifies assistant messages
+- Shows notifications
+
+## Configuration
+
+No configuration required.
+
+## Development
+
+1. Edit \`index.ts\` to customize the plugin behavior
+2. Reload the plugin from Settings → Plugins
+3. Test your changes
+
+## API Reference
+
+See the Plugin Documentation in Settings → Plugins → Documentation for complete API reference.
+
+## License
+
+MIT
+`
+        
+        const readmePath = await join(pluginDir, 'README.md')
+        await writeTextFile(readmePath, readme)
+        
+        console.log(`[PluginManager] Created template plugin: ${pluginId}`)
+        
+        // Show success notification
+        this.context.ui.notify(
+          `Template plugin "${pluginName}" created successfully! Reload plugins to see it.`,
+          'success'
+        )
+      } else {
+        throw new Error('Template creation is only available in Tauri environment')
+      }
+    } catch (error) {
+      console.error('[PluginManager] Failed to create template plugin:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      this.context.ui.notify(`Failed to create template plugin: ${errorMessage}`, 'error')
+      throw error
+    }
+  }
+
+  /**
+   * Load all plugins using the new PluginLoader
+   * 
+   * This method loads both built-in and external plugins using
+   * the PluginLoader and PluginExecutor.
+   */
+  async loadAllPlugins(): Promise<void> {
+    console.log('[PluginManager] Loading all plugins...')
+    
+    try {
+      // Load built-in plugins (already instantiated by PluginLoader)
+      const builtinPlugins = await this.loader.loadBuiltinPlugins()
+      console.log(`[PluginManager] Loaded ${builtinPlugins.length} built-in plugins`)
+      
+      // Load external plugins (already instantiated by PluginLoader)
+      const externalPlugins = await this.loader.loadExternalPlugins()
+      console.log(`[PluginManager] Loaded ${externalPlugins.length} external plugins`)
+      
+      // Register all loaded plugins
+      const allPlugins = [...builtinPlugins, ...externalPlugins]
+      
+      for (const pluginInstance of allPlugins) {
+        try {
+          // Register the plugin (already instantiated by PluginLoader)
+          await this.register(pluginInstance)
+          
+        } catch (error) {
+          console.error(`[PluginManager] Failed to register plugin ${pluginInstance.metadata.id}:`, error)
+          // Continue loading other plugins
+        }
+      }
+      
+      console.log(`[PluginManager] Successfully loaded ${this.plugins.size} plugins`)
+      
+    } catch (error) {
+      console.error('[PluginManager] Failed to load plugins:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Reload a specific plugin using PluginLoader
+   * 
+   * This is useful for hot-reloading external plugins during development.
+   */
+  async reloadPlugin(pluginId: string): Promise<void> {
+    const plugin = this.plugins.get(pluginId)
+    if (!plugin) {
+      throw new Error(`Plugin not found: ${pluginId}`)
+    }
+
+    // Only external plugins can be reloaded
+    if (plugin.metadata.isBuiltin) {
+      throw new Error(`Cannot reload built-in plugin: ${pluginId}`)
+    }
+
+    console.log(`[PluginManager] Reloading plugin: ${pluginId}`)
+
+    // Preserve state
+    const wasEnabled = plugin.metadata.enabled
+    const config = this.getPluginConfig(pluginId)
+    const folderPath = plugin.metadata.folderPath
+
+    // Unregister old instance
+    await this.unregister(pluginId)
+
+    // Clear loader cache for this plugin
+    this.loader.clearCache(folderPath)
+
+    try {
+      // Reload plugin from disk using the private loadPlugin method
+      // Since we can't access it directly, we'll reload all external plugins
+      // and find the one we need
+      const externalPlugins = await this.loader.loadExternalPlugins()
+      const reloadedPlugin = externalPlugins.find(p => p.metadata.id === pluginId)
+      
+      if (!reloadedPlugin) {
+        throw new Error(`Plugin ${pluginId} not found after reload`)
+      }
+      
+      // Update metadata with preserved state
+      reloadedPlugin.metadata.enabled = wasEnabled
+      
+      // Register the plugin
+      await this.register(reloadedPlugin)
+      
+      // Restore config
+      if (Object.keys(config).length > 0) {
+        await this.setPluginConfig(pluginId, config)
+      }
+      
+      console.log(`[PluginManager] Successfully reloaded plugin: ${pluginId}`)
+      
+    } catch (error) {
+      console.error(`[PluginManager] Failed to reload plugin ${pluginId}:`, error)
+      throw error
+    }
   }
 }

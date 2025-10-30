@@ -9,27 +9,30 @@
 export function hasReasoningCapability(modelName: string): boolean {
   const name = modelName.toLowerCase();
   
-  // OpenAI reasoning models (o1, o3 series)
+  // OpenAI reasoning models (o1, o3 series) - use reasoning_content field
   if (name.startsWith('o1')) return true;
   if (name.startsWith('o3')) return true;
   if (name.includes('o1-preview')) return true;
   if (name.includes('o1-mini')) return true;
   if (name.includes('o3-mini')) return true;
   
-  // DeepSeek reasoning models
+  // DeepSeek reasoning models - output reasoning in content with <think> tags
   if (name.includes('deepseek-r1')) return true;
   if (name.includes('deepseek') && name.includes('r1')) return true;
   if (name.includes('deepseek-reasoner')) return true;
+  if (name.includes('deepseek-r')) return true;
   
-  // QwQ and Qwen reasoning models (Alibaba)
+  // QwQ and Qwen reasoning models (Alibaba) - output reasoning in content
   if (name.includes('qwq')) return true;
   if (name.includes('qwen') && name.includes('qwq')) return true;
   // Qwen3 models have reasoning capabilities
   if (name.includes('qwen3')) return true;
   if (name.includes('qwen-3')) return true;
+  if (name.includes('qwen2.5') && name.includes('32b')) return true; // Qwen2.5-32B has reasoning
   
   // Marco-o1 (Alibaba)
   if (name.includes('marco-o1')) return true;
+  if (name.includes('marco') && name.includes('o1')) return true;
   
   // Kimi-k1 (Moonshot AI)
   if (name.includes('kimi-k1')) return true;
@@ -38,6 +41,7 @@ export function hasReasoningCapability(modelName: string): boolean {
   // Gemini reasoning models
   if (name.includes('gemini') && name.includes('thinking')) return true;
   if (name.includes('gemini-2.0-flash-thinking')) return true;
+  if (name.includes('gemini-exp-1206')) return true;
   
   // Generic reasoning indicators
   if (name.includes('reasoning')) return true;

@@ -6,6 +6,7 @@ import { formatTimestamp } from '../lib/utils'
 import { cn } from '../lib/utils'
 import type { UpdateInfo } from '../services/updateChecker'
 import downloadIcon from '../assets/download.svg'
+import { PluginHookRenderer } from './PluginHookRenderer'
 
 interface SidebarProps {
   sessions: ChatSession[]
@@ -149,6 +150,9 @@ export function Sidebar({
 
       {/* Sessions List */}
       <div className="flex-1 overflow-y-auto p-2">
+        {/* Plugin hooks: Add sidebar items */}
+        <PluginHookRenderer hookType="ui.sidebar" />
+        
         {sessions.length === 0 ? (
           <div className="text-center text-muted-foreground text-sm py-8">
             No chats yet

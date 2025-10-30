@@ -141,73 +141,185 @@ async function createPluginReadme(pluginsDir: string): Promise<void> {
 
 This directory contains external plugins for OpenChat.
 
-## How to Add Plugins
+## 🚀 Quick Start - Create Your First Plugin
 
-1. Create a new folder for your plugin (e.g., \`my-plugin\`)
-2. Add your plugin files:
-   - \`plugin.json\` - Plugin manifest
-   - \`index.js\` - Plugin code
-3. Restart OpenChat to load the plugin
+### Step 1: Create Plugin Folder
+Create a new folder with your plugin name (e.g., \`my-awesome-plugin\`)
 
-## Plugin Structure
-
-\`\`\`
-plugins/
-  my-plugin/
-    plugin.json
-    index.js
-\`\`\`
-
-### plugin.json Example
-
+### Step 2: Create plugin.json
 \`\`\`json
 {
-  "id": "my-plugin",
-  "name": "My Plugin",
+  "id": "my-awesome-plugin",
+  "name": "My Awesome Plugin",
   "version": "1.0.0",
-  "description": "My custom plugin",
+  "description": "Does something awesome",
   "author": "Your Name",
   "type": "message-processor",
-  "appVersion": ">=0.4.0"
+  "appVersion": ">=0.5.0"
 }
 \`\`\`
 
-### index.js Example
-
+### Step 3: Create index.js (or index.ts)
 \`\`\`javascript
-// Export a plugin class
-export class MyPlugin {
+// Simple plugin that transforms messages
+class MyAwesomePlugin {
   metadata = {
-    id: 'my-plugin',
-    name: 'My Plugin',
+    id: 'my-awesome-plugin',
+    name: 'My Awesome Plugin',
     version: '1.0.0',
-    description: 'My custom plugin',
+    description: 'Does something awesome',
+    type: 'message-processor',
+    enabled: true
+  }
+
+  // Transform outgoing messages (before sending to AI)
+  processOutgoing(content) {
+    console.log('Processing outgoing message:', content)
+    return content // Return modified content
+  }
+
+  // Transform incoming messages (from AI)
+  processIncoming(content) {
+    console.log('Processing incoming message:', content)
+    return content // Return modified content
+  }
+
+  // Called when plugin is loaded
+  onLoad() {
+    console.log('My Awesome Plugin loaded!')
+  }
+
+  // Called when plugin is unloaded
+  onUnload() {
+    console.log('My Awesome Plugin unloaded!')
+  }
+}
+
+// Export the plugin (works in both dev and production)
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = MyAwesomePlugin
+}
+\`\`\`
+
+### Step 4: Restart OpenChat
+Your plugin will be automatically loaded!
+
+## 📁 Plugin Structure
+
+\`\`\`
+plugins/
+  my-awesome-plugin/
+    plugin.json       ← Plugin metadata
+    index.js          ← Plugin code (or index.ts)
+    README.md         ← Optional documentation
+\`\`\`
+
+## 🎨 Plugin Types
+
+### 1. Message Processor
+Transform messages before/after sending
+\`\`\`javascript
+type: "message-processor"
+
+processOutgoing(content) { return content }
+processIncoming(content) { return content }
+\`\`\`
+
+### 2. Renderer
+Custom content rendering
+\`\`\`javascript
+type: "renderer"
+
+canRender(content) { return true/false }
+render(content) { return JSX }
+\`\`\`
+
+### 3. Tool
+Add callable tools for AI
+\`\`\`javascript
+type: "tool"
+
+getTools() { return [{ name, description, execute }] }
+\`\`\`
+
+### 4. UI Extension
+Add custom UI components
+\`\`\`javascript
+type: "ui-extension"
+
+getComponents() { return [{ id, component }] }
+\`\`\`
+
+## 💡 Tips
+
+- **Use console.log()** for debugging
+- **Test in dev mode first** before production
+- **Keep it simple** - start with message-processor
+- **Check examples** in the builtin plugins folder
+- **TypeScript works too!** Just use .ts extension
+
+## 🔧 Troubleshooting
+
+**Plugin not loading?**
+1. Check plugin.json syntax (use JSON validator)
+2. Check console for errors (F12)
+3. Make sure index.js exports the class correctly
+4. Restart OpenChat
+
+**Plugin crashes?**
+1. Check console for error messages
+2. Add try-catch blocks in your code
+3. Test with simple console.log first
+
+## 📚 Full Documentation
+
+For complete API reference and advanced examples:
+https://github.com/OpenChatGit/OpenChat/blob/main/src/plugins/PLUGIN_GUIDE.md
+
+## 🎯 Example Plugins
+
+### Uppercase Plugin
+\`\`\`javascript
+class UppercasePlugin {
+  metadata = {
+    id: 'uppercase',
+    name: 'Uppercase',
+    version: '1.0.0',
     type: 'message-processor',
     enabled: true
   }
 
   processOutgoing(content) {
-    // Transform outgoing messages
     return content.toUpperCase()
   }
-
-  onLoad() {
-    console.log('My plugin loaded!')
-  }
 }
+
+module.exports = UppercasePlugin
 \`\`\`
 
-## Plugin Types
+### Emoji Plugin
+\`\`\`javascript
+class EmojiPlugin {
+  metadata = {
+    id: 'emoji',
+    name: 'Emoji Replacer',
+    version: '1.0.0',
+    type: 'message-processor',
+    enabled: true
+  }
 
-- \`renderer\` - Custom content rendering
-- \`message-processor\` - Transform messages
-- \`tool\` - Add callable tools
-- \`ui-extension\` - Add UI components
+  processIncoming(content) {
+    return content
+      .replace(':)', '😊')
+      .replace(':D', '😄')
+      .replace(':(', '😢')
+  }
+}
 
-## Documentation
+module.exports = EmojiPlugin
+\`\`\`
 
-For full documentation, visit:
-https://github.com/OpenChatGit/OpenChat/blob/main/src/plugins/PLUGIN_GUIDE.md
+Happy Plugin Development! 🚀
 `
       
       await writeTextFile(readmePath, content)
@@ -296,12 +408,137 @@ export async function openPluginsDirectory(): Promise<void> {
 }
 
 /**
- * Note: Dynamic plugin loading from external JavaScript files is complex
- * and requires careful security considerations. For now, we'll focus on
- * creating the directory structure and documentation.
- * 
- * Future enhancement: Implement safe plugin loading using:
- * - Sandboxed execution environment
- * - Plugin signature verification
- * - Permission system
+ * Load plugin code from a plugin directory
+ * Supports both .js and .ts files
  */
+export async function loadPluginCode(pluginName: string): Promise<string | null> {
+  try {
+    if (typeof window !== 'undefined' && '__TAURI__' in window) {
+      const { readTextFile, exists } = await import('@tauri-apps/plugin-fs')
+      const { join } = await import('@tauri-apps/api/path')
+      const pluginsDir = await getPluginsDirectory()
+      
+      // Try index.js first, then index.ts
+      const possibleFiles = ['index.js', 'index.ts', `${pluginName}.js`, `${pluginName}.ts`]
+      
+      for (const filename of possibleFiles) {
+        const codePath = await join(pluginsDir, pluginName, filename)
+        const codeExists = await exists(codePath)
+        
+        if (codeExists) {
+          const code = await readTextFile(codePath)
+          console.log(`[Plugins] Loaded code for ${pluginName} from ${filename}`)
+          return code
+        }
+      }
+      
+      console.warn(`[Plugins] No code file found for ${pluginName}`)
+    }
+  } catch (error) {
+    console.error(`Failed to load code for ${pluginName}:`, error)
+  }
+  
+  return null
+}
+
+/**
+ * Dynamically execute plugin code and return the plugin instance
+ * Uses Function constructor for safe evaluation
+ */
+export async function executePluginCode(pluginName: string, code: string): Promise<any | null> {
+  try {
+    // Create a safe execution context
+    const exports: any = {}
+    const module = { exports }
+    
+    // Wrap code in a function to provide module/exports
+    const wrappedCode = `
+      (function(module, exports) {
+        ${code}
+        
+        // Support both ES6 export and CommonJS
+        if (typeof module.exports.default !== 'undefined') {
+          return module.exports.default;
+        }
+        
+        // Look for exported class
+        const exportedKeys = Object.keys(module.exports);
+        if (exportedKeys.length > 0) {
+          return module.exports[exportedKeys[0]];
+        }
+        
+        return module.exports;
+      })
+    `
+    
+    // Execute the wrapped code
+    const fn = new Function('module', 'exports', `return ${wrappedCode}`)
+    const PluginClass = fn(module, exports)
+    
+    // Instantiate the plugin
+    if (typeof PluginClass === 'function') {
+      const instance = new PluginClass()
+      console.log(`[Plugins] Successfully instantiated ${pluginName}`)
+      return instance
+    } else if (typeof PluginClass === 'object') {
+      console.log(`[Plugins] Using plugin object for ${pluginName}`)
+      return PluginClass
+    }
+    
+    console.error(`[Plugins] Invalid plugin export for ${pluginName}`)
+    return null
+  } catch (error) {
+    console.error(`Failed to execute plugin code for ${pluginName}:`, error)
+    return null
+  }
+}
+
+/**
+ * Load and instantiate an external plugin
+ */
+export async function loadExternalPlugin(pluginName: string): Promise<any | null> {
+  try {
+    // Load manifest
+    const manifest = await loadPluginManifest(pluginName)
+    if (!manifest) {
+      console.error(`[Plugins] No manifest for ${pluginName}`)
+      return null
+    }
+    
+    // Load code
+    const code = await loadPluginCode(pluginName)
+    if (!code) {
+      console.error(`[Plugins] No code for ${pluginName}`)
+      return null
+    }
+    
+    // Execute code and get plugin instance
+    const plugin = await executePluginCode(pluginName, code)
+    if (!plugin) {
+      console.error(`[Plugins] Failed to instantiate ${pluginName}`)
+      return null
+    }
+    
+    // Merge manifest metadata with plugin
+    if (plugin.metadata) {
+      plugin.metadata = {
+        ...manifest,
+        ...plugin.metadata,
+        isBuiltin: false,
+        loaded: true
+      }
+    } else {
+      plugin.metadata = {
+        ...manifest,
+        isBuiltin: false,
+        loaded: true
+      }
+    }
+    
+    console.log(`[Plugins] Successfully loaded external plugin: ${pluginName}`)
+    return plugin
+  } catch (error) {
+    console.error(`Failed to load external plugin ${pluginName}:`, error)
+    return null
+  }
+}

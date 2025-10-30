@@ -2,6 +2,7 @@
 import { BaseProvider } from './base'
 import type { ChatCompletionRequest, ModelInfo } from '../types'
 import { createModelCapabilities } from '../lib/visionDetection'
+import { debugReasoningResponse, logReasoningDebug, isReasoningDebugEnabled } from '../lib/reasoningDebug'
 
 export class OpenAIProvider extends BaseProvider {
   async listModels(): Promise<ModelInfo[]> {
@@ -252,8 +253,15 @@ export class OpenAIProvider extends BaseProvider {
 
       const reasoning = choice.message?.reasoning_content || ''
       const content = choice.message?.content || ''
+      const result = reasoning ? `<think>${reasoning}</think>${content}` : content
       
-      return reasoning ? `<think>${reasoning}</think>${content}` : content
+      // Debug reasoning if enabled
+      if (isReasoningDebugEnabled()) {
+        const debugInfo = debugReasoningResponse(request.model, result, data)
+        logReasoningDebug(debugInfo)
+      }
+      
+      return result
     }
 
     // Streaming request
@@ -343,6 +351,13 @@ export class OpenAIProvider extends BaseProvider {
                 fullContent += '</think>'
                 onChunk('</think>')
               }
+              
+              // Debug reasoning if enabled
+              if (isReasoningDebugEnabled()) {
+                const debugInfo = debugReasoningResponse(request.model, fullContent, json)
+                logReasoningDebug(debugInfo)
+              }
+              
               return fullContent
             }
           } catch (e) {
@@ -357,6 +372,12 @@ export class OpenAIProvider extends BaseProvider {
     if (reasoningOpen) {
       fullContent += '</think>'
       onChunk('</think>')
+    }
+
+    // Debug reasoning if enabled
+    if (isReasoningDebugEnabled()) {
+      const debugInfo = debugReasoningResponse(request.model, fullContent)
+      logReasoningDebug(debugInfo)
     }
 
     return fullContent

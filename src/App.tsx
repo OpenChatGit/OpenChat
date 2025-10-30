@@ -22,8 +22,18 @@ function App() {
     pluginManager, 
     plugins, 
     enablePlugin, 
-    disablePlugin 
+    disablePlugin,
+    reloadPlugin
   } = usePlugins()
+
+  const handleCreateTemplatePlugin = async (pluginName: string) => {
+    try {
+      await pluginManager.createTemplatePlugin(pluginName)
+    } catch (error) {
+      console.error('Failed to create template plugin:', error)
+      throw error
+    }
+  }
 
   const { updateInfo } = useUpdateChecker()
   
@@ -202,6 +212,8 @@ function App() {
           plugins={plugins}
           onEnablePlugin={enablePlugin}
           onDisablePlugin={disablePlugin}
+          onReloadPlugin={reloadPlugin}
+          onCreateTemplatePlugin={handleCreateTemplatePlugin}
         />
       )}
 

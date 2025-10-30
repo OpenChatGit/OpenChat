@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Button } from './ui/Button'
 import { Input } from './ui/Input'
 import { Toggle } from './ui/Toggle'
+import { Slider } from './ui/Slider'
 import type { RAGConfig } from '../lib/web-search/types'
 import { DEFAULT_RAG_CONFIG } from '../lib/web-search/types'
 
@@ -99,26 +100,17 @@ export function WebSearchSettings({
         </div>
 
         {/* Max Results Slider */}
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <label className="text-sm font-medium">Max Results</label>
-            <span className="text-sm text-muted-foreground">{localSettings.maxResults}</span>
-          </div>
-          <input
-            type="range"
-            min="1"
-            max="10"
-            value={localSettings.maxResults}
-            onChange={(e) => updateSetting('maxResults', parseInt(e.target.value))}
-            className="w-full h-2 bg-gray-600 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer slider-thumb"
-            style={{
-              accentColor: 'var(--color-primary)'
-            }}
-          />
-          <p className="text-xs text-muted-foreground mt-1">
-            Number of search results to retrieve
-          </p>
-        </div>
+        <Slider
+          label="Max Results"
+          value={localSettings.maxResults}
+          onChange={(value) => updateSetting('maxResults', value)}
+          min={1}
+          max={10}
+          step={1}
+        />
+        <p className="text-xs text-muted-foreground -mt-1">
+          Number of search results to retrieve
+        </p>
 
         {/* Cache Toggle */}
         <div className="flex items-center justify-between">
@@ -145,95 +137,58 @@ export function WebSearchSettings({
         </div>
         
         {/* Chunk Size Slider */}
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <label className="text-sm font-medium">Chunk Size</label>
-            <span className="text-sm text-muted-foreground">{localSettings.ragConfig.chunkSize}</span>
-          </div>
-          <input
-            type="range"
-            min="500"
-            max="2000"
-            step="100"
-            value={localSettings.ragConfig.chunkSize}
-            onChange={(e) => updateRAGConfig('chunkSize', parseInt(e.target.value))}
-            className="w-full h-2 bg-gray-600 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer slider-thumb"
-            style={{
-              accentColor: 'var(--color-primary)'
-            }}
-          />
-          <p className="text-xs text-muted-foreground mt-1">
-            Characters per content chunk (500-2000)
-          </p>
-        </div>
+        <Slider
+          label="Chunk Size"
+          value={localSettings.ragConfig.chunkSize}
+          onChange={(value) => updateRAGConfig('chunkSize', value)}
+          min={500}
+          max={2000}
+          step={100}
+        />
+        <p className="text-xs text-muted-foreground -mt-1">
+          Characters per content chunk
+        </p>
 
         {/* Max Chunks Slider */}
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <label className="text-sm font-medium">Max Chunks</label>
-            <span className="text-sm text-muted-foreground">{localSettings.ragConfig.maxChunks}</span>
-          </div>
-          <input
-            type="range"
-            min="3"
-            max="20"
-            value={localSettings.ragConfig.maxChunks}
-            onChange={(e) => updateRAGConfig('maxChunks', parseInt(e.target.value))}
-            className="w-full h-2 bg-gray-600 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer slider-thumb"
-            style={{
-              accentColor: 'var(--color-primary)'
-            }}
-          />
-          <p className="text-xs text-muted-foreground mt-1">
-            Maximum chunks to include in context (3-20)
-          </p>
-        </div>
+        <Slider
+          label="Max Chunks"
+          value={localSettings.ragConfig.maxChunks}
+          onChange={(value) => updateRAGConfig('maxChunks', value)}
+          min={3}
+          max={20}
+          step={1}
+        />
+        <p className="text-xs text-muted-foreground -mt-1">
+          Maximum chunks to include in context
+        </p>
 
         {/* Recency Weight Slider */}
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <label className="text-sm font-medium">Recency Weight</label>
-            <span className="text-sm text-muted-foreground">{localSettings.ragConfig.recencyWeight.toFixed(2)}</span>
-          </div>
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.05"
-            value={localSettings.ragConfig.recencyWeight}
-            onChange={(e) => updateRAGConfig('recencyWeight', parseFloat(e.target.value))}
-            className="w-full h-2 bg-gray-600 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer slider-thumb"
-            style={{
-              accentColor: 'var(--color-primary)'
-            }}
-          />
-          <p className="text-xs text-muted-foreground mt-1">
-            Weight for newer content (0.0-1.0)
-          </p>
-        </div>
+        <Slider
+          label="Recency Weight"
+          value={localSettings.ragConfig.recencyWeight}
+          onChange={(value) => updateRAGConfig('recencyWeight', value)}
+          min={0}
+          max={1}
+          step={0.05}
+          valueFormatter={(v) => v.toFixed(2)}
+        />
+        <p className="text-xs text-muted-foreground -mt-1">
+          Weight for newer content
+        </p>
 
         {/* Quality Weight Slider */}
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <label className="text-sm font-medium">Quality Weight</label>
-            <span className="text-sm text-muted-foreground">{localSettings.ragConfig.qualityWeight.toFixed(2)}</span>
-          </div>
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.05"
-            value={localSettings.ragConfig.qualityWeight}
-            onChange={(e) => updateRAGConfig('qualityWeight', parseFloat(e.target.value))}
-            className="w-full h-2 bg-gray-600 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer slider-thumb"
-            style={{
-              accentColor: 'var(--color-primary)'
-            }}
-          />
-          <p className="text-xs text-muted-foreground mt-1">
-            Weight for content quality (0.0-1.0)
-          </p>
-        </div>
+        <Slider
+          label="Quality Weight"
+          value={localSettings.ragConfig.qualityWeight}
+          onChange={(value) => updateRAGConfig('qualityWeight', value)}
+          min={0}
+          max={1}
+          step={0.05}
+          valueFormatter={(v) => v.toFixed(2)}
+        />
+        <p className="text-xs text-muted-foreground -mt-1">
+          Weight for content quality
+        </p>
 
         {/* Trusted Domains Input */}
         <div>

@@ -10,6 +10,7 @@ import infoIcon from '../assets/info_icon.svg'
 import refreshIcon from '../assets/refresh.svg'
 import { CitationParser } from '../lib/citations/citationParser'
 import type { SourceRegistry } from '../lib/web-search/sourceRegistry'
+import { PluginHookRenderer } from './PluginHookRenderer'
 
 interface ChatMessageProps {
   message: Message
@@ -367,7 +368,7 @@ export function ChatMessage({ message, rendererPlugins = [], previousMessage, so
     return (
       <>
         <div className="px-4 py-3">
-          <div className="max-w-3xl mx-auto flex justify-end">
+          <div className="max-w-3xl mx-auto flex flex-col items-end">
             <div 
               className="max-w-[70%] rounded-3xl px-5 py-3"
               style={{ backgroundColor: '#2F2F2F' }}
@@ -377,6 +378,8 @@ export function ChatMessage({ message, rendererPlugins = [], previousMessage, so
                 {message.content}
               </div>
             </div>
+            {/* Plugin hooks: Render UI under user messages */}
+            <PluginHookRenderer hookType="message.render.user" message={message} />
           </div>
         </div>
         {renderLightbox()}
@@ -594,6 +597,9 @@ export function ChatMessage({ message, rendererPlugins = [], previousMessage, so
             onToggle={() => setIsTokenDropdownOpen(!isTokenDropdownOpen)}
           />
         )}
+        
+        {/* Plugin hooks: Render UI under assistant messages */}
+        <PluginHookRenderer hookType="message.render.assistant" message={message} />
       </div>
     </div>
     {renderLightbox()}

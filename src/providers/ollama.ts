@@ -2,6 +2,7 @@
 import { BaseProvider } from './base'
 import type { ChatCompletionRequest, ModelInfo } from '../types'
 import { createModelCapabilities } from '../lib/visionDetection'
+import { debugReasoningResponse, logReasoningDebug, isReasoningDebugEnabled } from '../lib/reasoningDebug'
 
 export class OllamaProvider extends BaseProvider {
   async listModels(): Promise<ModelInfo[]> {
@@ -95,7 +96,15 @@ export class OllamaProvider extends BaseProvider {
       const msg = data.message || {}
       const reasoning = (msg.reasoning_content || msg.reasoning || msg.thoughts || msg.thinking || data.reasoning_content || data.reasoning || data.thoughts || data.thinking || '').toString().trim()
       const text = msg.content || data.response || ''
-      return reasoning ? `<think>${reasoning}</think>${text}` : text
+      const result = reasoning ? `<think>${reasoning}</think>${text}` : text
+      
+      // Debug reasoning if enabled
+      if (isReasoningDebugEnabled()) {
+        const debugInfo = debugReasoningResponse(request.model, result, data)
+        logReasoningDebug(debugInfo)
+      }
+      
+      return result
     }
 
     // Streaming request
@@ -164,6 +173,13 @@ export class OllamaProvider extends BaseProvider {
                 fullContent += '</think>'
                 onChunk && onChunk('</think>')
               }
+              
+              // Debug reasoning if enabled
+              if (isReasoningDebugEnabled()) {
+                const debugInfo = debugReasoningResponse(request.model, fullContent, json)
+                logReasoningDebug(debugInfo)
+              }
+              
               return fullContent
             }
           } catch (e) {

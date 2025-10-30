@@ -1,7 +1,8 @@
-import { useState } from 'react'
-import { X, Settings as SettingsIcon, Plug, ChevronDown, ChevronRight, Search, FolderOpen } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { X, Settings as SettingsIcon, Plug, ChevronDown, ChevronRight, Search, FolderOpen, Book } from 'lucide-react'
 import { Button } from './ui/Button'
 import { PluginCard } from './PluginCard'
+import { PluginConfigPanel } from './PluginConfigPanel'
 import type { ProviderConfig, ModelInfo } from '../types'
 import type { BasePlugin } from '../plugins/core'
 import { openPluginsDirectory } from '../services/externalPluginLoader'
@@ -10,6 +11,7 @@ import { cn } from '../lib/utils'
 // Import the Settings components
 import { Settings as SettingsContent } from './Settings'
 import { WebSearchSettings, type WebSearchSettings as WebSearchSettingsType } from './WebSearchSettings'
+import { PluginDocumentation } from './PluginDocumentation'
 
 interface SettingsModalProps {
   // Settings props
@@ -30,12 +32,15 @@ interface SettingsModalProps {
   plugins: BasePlugin[]
   onEnablePlugin: (pluginId: string) => void
   onDisablePlugin: (pluginId: string) => void
+  onReloadPlugin: (pluginId: string) => Promise<void>
+  onCreateTemplatePlugin?: (pluginName: string) => Promise<void>
   
   // Modal props
   onClose: () => void
 }
 
-type Tab = 'settings' | 'websearch' | 'plugins'
+type Tab = 'settings' | 'websearch' | 'plugins' | 'plugin-docs-getting-started' | 'plugin-docs-api' | 'plugin-docs-examples' | 'plugin-docs-hooks'
+type DocPage = 'getting-started' | 'api' | 'examples' | 'hooks'
 
 export function SettingsModal({
   providers,
@@ -53,11 +58,24 @@ export function SettingsModal({
   plugins,
   onEnablePlugin,
   onDisablePlugin,
+  onReloadPlugin,
+  onCreateTemplatePlugin,
   onClose
 }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState<Tab>('settings')
   const [builtinExpanded, setBuiltinExpanded] = useState(true)
   const [externalExpanded, setExternalExpanded] = useState(true)
+  const [pluginDocsExpanded, setPluginDocsExpanded] = useState(false)
+  const [reloadingPlugins, setReloadingPlugins] = useState<Set<string>>(new Set())
+  const [reloadErrors, setReloadErrors] = useState<Record<string, string>>({})
+  const [configuringPlugin, setConfiguringPlugin] = useState<BasePlugin | null>(null)
+
+  // Auto-expand plugin docs when a plugin docs tab is active
+  useEffect(() => {
+    if (pluginDocsTabs.some(t => t.id === activeTab)) {
+      setPluginDocsExpanded(true)
+    }
+  }, [activeTab])
 
   const tabs = [
     { id: 'settings' as Tab, label: 'Settings', icon: SettingsIcon },
@@ -65,9 +83,73 @@ export function SettingsModal({
     { id: 'plugins' as Tab, label: 'Plugins', icon: Plug }
   ]
 
+  const pluginDocsTabs = [
+    { id: 'plugin-docs-getting-started' as Tab, label: 'Getting Started', docPage: 'getting-started' as DocPage },
+    { id: 'plugin-docs-api' as Tab, label: 'API Reference', docPage: 'api' as DocPage },
+    { id: 'plugin-docs-examples' as Tab, label: 'Examples', docPage: 'examples' as DocPage },
+    { id: 'plugin-docs-hooks' as Tab, label: 'Hooks Reference', docPage: 'hooks' as DocPage }
+  ]
+
   // Separate plugins into builtin and external
   const builtinPlugins = plugins.filter(p => p.metadata.isBuiltin)
   const externalPlugins = plugins.filter(p => !p.metadata.isBuiltin)
+
+  // Handle plugin reload with error handling
+  const handleReloadPlugin = async (pluginId: string) => {
+    // Clear any previous error for this plugin
+    setReloadErrors(prev => {
+      const newErrors = { ...prev }
+      delete newErrors[pluginId]
+      return newErrors
+    })
+
+    // Add to reloading set
+    setReloadingPlugins(prev => new Set(prev).add(pluginId))
+
+    try {
+      await onReloadPlugin(pluginId)
+      console.log(`[SettingsModal] Successfully reloaded plugin: ${pluginId}`)
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
+      console.error(`[SettingsModal] Failed to reload plugin ${pluginId}:`, error)
+      
+      // Store error for display
+      setReloadErrors(prev => ({
+        ...prev,
+        [pluginId]: errorMessage
+      }))
+    } finally {
+      // Remove from reloading set
+      setReloadingPlugins(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(pluginId)
+        return newSet
+      })
+    }
+  }
+
+  // Handle plugin configuration
+  const handleConfigurePlugin = (pluginId: string) => {
+    const plugin = plugins.find(p => p.metadata.id === pluginId)
+    if (plugin) {
+      setConfiguringPlugin(plugin)
+    }
+  }
+
+  // Handle config save
+  const handleConfigSave = (pluginId: string, config: Record<string, any>) => {
+    console.log(`[SettingsModal] Config saved for plugin ${pluginId}:`, config)
+    
+    // Trigger onConfigChange lifecycle hook if plugin has it
+    const plugin = plugins.find(p => p.metadata.id === pluginId)
+    if (plugin && typeof plugin.onConfigChange === 'function') {
+      try {
+        plugin.onConfigChange(config)
+      } catch (error) {
+        console.error(`[SettingsModal] Error calling onConfigChange for ${pluginId}:`, error)
+      }
+    }
+  }
 
   return (
     <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -93,6 +175,46 @@ export function SettingsModal({
                 <span>{tab.label}</span>
               </button>
             ))}
+            
+            {/* Plugin Docs Dropdown */}
+            <div>
+              <button
+                onClick={() => setPluginDocsExpanded(!pluginDocsExpanded)}
+                className={cn(
+                  'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
+                  pluginDocsTabs.some(t => t.id === activeTab)
+                    ? 'bg-primary/20 text-foreground'
+                    : 'text-muted-foreground hover:bg-white/10 hover:text-foreground'
+                )}
+              >
+                <Book className="w-4 h-4" />
+                <span className="flex-1 text-left">Plugin Docs</span>
+                {pluginDocsExpanded ? (
+                  <ChevronDown className="w-4 h-4" />
+                ) : (
+                  <ChevronRight className="w-4 h-4" />
+                )}
+              </button>
+              
+              {pluginDocsExpanded && (
+                <div className="ml-4 mt-1 space-y-1">
+                  {pluginDocsTabs.map((tab) => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id)}
+                      className={cn(
+                        'w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors',
+                        activeTab === tab.id
+                          ? 'bg-primary text-primary-foreground'
+                          : 'text-muted-foreground hover:bg-white/10 hover:text-foreground'
+                      )}
+                    >
+                      <span>{tab.label}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -101,7 +223,9 @@ export function SettingsModal({
           {/* Header */}
           <div className="flex items-center justify-between p-6 border-b border-border flex-shrink-0">
             <h2 className="text-2xl font-semibold">
-              {tabs.find(t => t.id === activeTab)?.label}
+              {tabs.find(t => t.id === activeTab)?.label || 
+               pluginDocsTabs.find(t => t.id === activeTab)?.label || 
+               'Plugin Docs'}
             </h2>
             <Button variant="ghost" size="icon" onClick={onClose}>
               <X className="w-5 h-5" />
@@ -133,6 +257,27 @@ export function SettingsModal({
                 <WebSearchSettings
                   settings={webSearchSettings}
                   onUpdateSettings={onUpdateWebSearchSettings}
+                />
+              </div>
+            )}
+
+            {pluginDocsTabs.some(t => t.id === activeTab) && (
+              <div className="h-full">
+                <PluginDocumentation
+                  page={pluginDocsTabs.find(t => t.id === activeTab)?.docPage || 'getting-started'}
+                  onCreateTemplate={async () => {
+                    if (onCreateTemplatePlugin) {
+                      const pluginName = prompt('Enter plugin name:')
+                      if (pluginName) {
+                        try {
+                          await onCreateTemplatePlugin(pluginName)
+                        } catch (error) {
+                          console.error('Failed to create template:', error)
+                        }
+                      }
+                    }
+                  }}
+                  onOpenPluginsFolder={openPluginsDirectory}
                 />
               </div>
             )}
@@ -170,6 +315,7 @@ export function SettingsModal({
                           plugin={plugin.metadata}
                           onEnable={onEnablePlugin}
                           onDisable={onDisablePlugin}
+                          onConfigure={handleConfigurePlugin}
                         />
                       ))}
                     </div>
@@ -226,14 +372,27 @@ export function SettingsModal({
                       ) : (
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                           {externalPlugins.map((plugin) => (
-                            <PluginCard
-                              key={plugin.metadata.id}
-                              plugin={plugin.metadata}
-                              onEnable={onEnablePlugin}
-                              onDisable={onDisablePlugin}
-                              onReload={(id) => console.log('Reload:', id)}
-                              onUninstall={(id) => console.log('Uninstall:', id)}
-                            />
+                            <div key={plugin.metadata.id} className="space-y-2">
+                              <PluginCard
+                                plugin={plugin.metadata}
+                                onEnable={onEnablePlugin}
+                                onDisable={onDisablePlugin}
+                                onConfigure={handleConfigurePlugin}
+                                onReload={handleReloadPlugin}
+                                onUninstall={(id) => console.log('Uninstall:', id)}
+                                isReloading={reloadingPlugins.has(plugin.metadata.id)}
+                              />
+                              {reloadErrors[plugin.metadata.id] && (
+                                <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20">
+                                  <p className="text-xs text-destructive font-medium mb-1">
+                                    Reload Failed
+                                  </p>
+                                  <p className="text-xs text-destructive/80">
+                                    {reloadErrors[plugin.metadata.id]}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
                           ))}
                         </div>
                       )}
@@ -245,6 +404,15 @@ export function SettingsModal({
           </div>
         </div>
       </div>
+
+      {/* Plugin Configuration Panel */}
+      {configuringPlugin && (
+        <PluginConfigPanel
+          plugin={configuringPlugin.metadata}
+          onClose={() => setConfiguringPlugin(null)}
+          onSave={handleConfigSave}
+        />
+      )}
     </div>
   )
 }
