@@ -40,7 +40,7 @@ const DEFAULT_CONFIG: OrchestratorConfig = {
   cacheTTL: 3600000,          // 1 hour
   maxCacheSize: 100,          // 100 entries
   maxCacheSizeBytes: 100 * 1024 * 1024, // 100 MB
-  scrapingTimeout: 30000,     // 30 seconds
+  scrapingTimeout: 45000,     // 45 seconds (increased for slow sites like GitHub)
   maxConcurrentScrapes: 5,    // 5 parallel requests
   maxRetries: 3,              // 3 retry attempts
   cacheCleanupInterval: 300000 // 5 minutes

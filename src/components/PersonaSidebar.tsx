@@ -60,9 +60,16 @@ export function PersonaSidebar({
   ]
 
   const handlePresetClick = (preset: typeof presets[0]) => {
+    console.log('[PersonaSidebar] Preset clicked:', preset.label)
+    // First update the prompt
     onPersonaPromptChange(preset.prompt)
+    // Then enable if not already enabled
     if (!personaEnabled) {
-      onPersonaEnabledChange(true)
+      console.log('[PersonaSidebar] Enabling persona with preset')
+      // Use setTimeout to ensure prompt is set first
+      setTimeout(() => {
+        onPersonaEnabledChange(true)
+      }, 0)
     }
   }
 
@@ -72,11 +79,12 @@ export function PersonaSidebar({
 
   return (
     <>
-      {/* Backdrop overlay for mobile */}
+      {/* Backdrop overlay - for both mobile and desktop */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-30 md:hidden"
+          className="fixed inset-0 bg-black/30 z-30 transition-opacity duration-300"
           onClick={onClose}
+          aria-hidden="true"
         />
       )}
 
@@ -84,8 +92,9 @@ export function PersonaSidebar({
       <div
         className={`fixed top-0 right-0 h-full z-40 transition-transform duration-300 ease-in-out ${
           isOpen ? 'translate-x-0' : 'translate-x-full'
-        } w-full md:w-80`}
+        } w-full md:w-80 shadow-2xl`}
         style={{ backgroundColor: 'var(--color-sidebar)' }}
+        onClick={(e) => e.stopPropagation()}
       >
         <div className="flex flex-col h-full">
           {/* Header with close button */}
@@ -106,23 +115,36 @@ export function PersonaSidebar({
             {/* Enable/Disable Toggle */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <div>
+                <div className="flex-1">
                   <label className="text-sm font-medium">Enable Persona</label>
                   <p className="text-xs text-muted-foreground mt-1">
                     Activate custom AI persona for this chat
                   </p>
                 </div>
-                <Toggle
-                  checked={personaEnabled}
-                  onChange={onPersonaEnabledChange}
-                />
+                <div className="flex items-center gap-2">
+                  <Toggle
+                    checked={personaEnabled}
+                    onChange={(checked) => {
+                      console.log('[PersonaSidebar] Toggle changed:', checked)
+                      onPersonaEnabledChange(checked)
+                    }}
+                  />
+                </div>
               </div>
 
               {/* Visual indicator for active persona */}
               {personaEnabled && personaPrompt.trim() && (
-                <div className="flex items-center gap-2 text-xs text-green-400">
-                  <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                <div className="flex items-center gap-2 text-xs text-green-400 animate-in fade-in duration-200">
+                  <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
                   <span>Persona active</span>
+                </div>
+              )}
+              
+              {/* Warning when enabled but no prompt */}
+              {personaEnabled && !personaPrompt.trim() && (
+                <div className="flex items-center gap-2 text-xs text-yellow-400 animate-in fade-in duration-200">
+                  <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></div>
+                  <span>Persona enabled but no prompt set</span>
                 </div>
               )}
             </div>
@@ -175,15 +197,9 @@ export function PersonaSidebar({
                 />
               </div>
               
-              {/* Character count and status */}
+              {/* Character count */}
               <div className="flex items-center justify-between text-xs">
                 <span className="text-muted-foreground">{characterCount} characters</span>
-                {personaEnabled && !personaPrompt.trim() && (
-                  <span className="text-yellow-400 flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 bg-yellow-400 rounded-full animate-pulse"></span>
-                    Persona enabled but empty
-                  </span>
-                )}
               </div>
             </div>
 

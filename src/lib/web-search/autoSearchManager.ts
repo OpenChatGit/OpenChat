@@ -571,10 +571,24 @@ export class AutoSearchManager {
 
     // Build enhanced message with system prompt
     const systemPrompt = this.buildSystemPrompt(context);
-    const enhancedMessage = `${systemPrompt}\n\n${formattedContext}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\nUser Question: ${userMessage}`;
+    const enhancedMessage = `${systemPrompt}
 
-    console.log('[AutoSearchManager] Enhanced message preview (first 500 chars):', enhancedMessage.substring(0, 500));
+${formattedContext}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+❓ USER'S QUESTION:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+${userMessage}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+💡 YOUR TASK: Answer the user's question above using the web search results provided. Be specific, accurate, and cite sources using [1], [2], etc.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+
+    console.log('[AutoSearchManager] Enhanced message preview (first 800 chars):', enhancedMessage.substring(0, 800));
     console.log('[AutoSearchManager] Total enhanced message length:', enhancedMessage.length);
+    console.log('[AutoSearchManager] Sources included:', context.sources.length);
+    console.log('[AutoSearchManager] Chunks included:', context.chunks.length);
 
     return enhancedMessage;
   }
@@ -763,40 +777,46 @@ export class AutoSearchManager {
       day: 'numeric' 
     });
 
-    return `📊 WEB SEARCH CONTEXT
+    return `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📊 WEB SEARCH RESULTS PROVIDED
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-I have searched the web and found current information from ${sourceCount} reliable source(s) to help answer your question.
-Below are ${chunkCount} relevant section(s) that were selected based on their relevance to: "${context.query}"
+I have searched the web and found current information from ${sourceCount} reliable source(s).
+Below are ${chunkCount} relevant section(s) extracted from these sources.
 
-CURRENT DATE: ${dateString}
+🗓️ CURRENT DATE: ${dateString}
 
-CRITICAL INSTRUCTIONS FOR INTERPRETING WEB SEARCH RESULTS:
+⚠️ CRITICAL: YOU MUST USE THE INFORMATION BELOW TO ANSWER THE USER'S QUESTION
 
-1. **Date Awareness**: Today is ${dateString}. Any dates in the search results must be interpreted relative to this date.
+📋 INSTRUCTIONS FOR USING WEB SEARCH RESULTS:
 
-2. **Version/Release Information**: 
-   - If the user asks about "latest" or "current" version, look for the MOST RECENT version number mentioned
-   - Ignore older versions unless specifically asked about version history
-   - If multiple versions are mentioned, clearly identify which is the latest
+1. **USE THE PROVIDED INFORMATION**: The search results below contain current, relevant information. You MUST base your answer primarily on this information.
 
-3. **Temporal Logic**:
-   - Dates in the future are ERRORS in the source data
-   - "Released October 2024" when today is October 2025 means it was released OVER A YEAR AGO
-   - Always calculate how long ago something happened relative to today
+2. **Date Awareness**: Today is ${dateString}. Interpret all dates relative to today.
 
-4. **Source Quality**:
-   - Prioritize official documentation and release pages
-   - Be skeptical of outdated cached content
-   - If sources contradict each other, mention the discrepancy and cite both
+3. **Latest Information**: 
+   - When asked about "latest" or "current" versions, use the MOST RECENT information from the search results
+   - Clearly state version numbers and release dates found in the results
+   - If multiple versions are mentioned, identify which is the latest
 
-5. **Transparency**:
-   - If the search results seem outdated or incomplete, SAY SO
-   - If you can't find the latest information, acknowledge this limitation
-   - Cite specific sources when making claims (e.g., "According to python.org...")
+4. **Be Specific and Cite Sources**:
+   - Reference specific sources when making claims (e.g., "According to the official documentation...")
+   - Include relevant details like version numbers, dates, and specific features
+   - Use the [1], [2], [3] citation numbers provided in the search results
 
-6. **Presentation**:
-   - Present the information in a clear, well-structured way
-   - If the search results don't fully answer the question, acknowledge what information is available and what is missing`;
+5. **Acknowledge Limitations**:
+   - If the search results don't fully answer the question, say so
+   - If information seems outdated or contradictory, mention this
+   - Don't make up information not present in the search results
+
+6. **Structure Your Answer**:
+   - Start by directly answering the user's question using the search results
+   - Provide relevant details and examples from the sources
+   - Keep your answer clear, accurate, and well-organized
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📚 SEARCH RESULTS (Use this information to answer):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
   }
 }
 

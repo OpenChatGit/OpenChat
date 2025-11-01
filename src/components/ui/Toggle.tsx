@@ -31,18 +31,26 @@ export function Toggle({ checked, onChange, disabled = false, size = 'md' }: Tog
 
   const sizeConfig = sizes[size]
 
+  const handleClick = () => {
+    if (!disabled) {
+      const newValue = !checked
+      console.log('[Toggle] Click:', { from: checked, to: newValue })
+      onChange(newValue)
+    }
+  }
+
   return (
     <button
       type="button"
       role="switch"
       aria-checked={checked}
       disabled={disabled}
-      onClick={() => !disabled && onChange(!checked)}
+      onClick={handleClick}
       className={`
         relative inline-flex items-center ${sizeConfig.track} rounded-full
         transition-all duration-300 ease-in-out
         focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-offset-transparent
-        ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
+        ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:opacity-90'}
         ${checked 
           ? 'bg-green-500 focus:ring-green-500/50' 
           : 'bg-gray-600 dark:bg-gray-700 focus:ring-gray-500/50'

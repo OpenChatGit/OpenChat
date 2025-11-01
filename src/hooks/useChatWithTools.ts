@@ -29,7 +29,7 @@ export function useChatWithTools(pluginManager: PluginManager) {
       return []
     }
   })
-  
+
   // Load current session from localStorage on initial mount
   const [currentSession, setCurrentSessionState] = useState<ChatSession | null>(() => {
     try {
@@ -47,18 +47,18 @@ export function useChatWithTools(pluginManager: PluginManager) {
     const sourceRegistry = autoSearchManager.current.getOrchestrator().getSourceRegistry()
     sourceRegistry.clear()
     console.log('[useChatWithTools] SourceRegistry cleared for session switch')
-    
+
     setCurrentSessionState(sessionOrUpdater)
   }, [])
-  
+
   const [isGenerating, setIsGenerating] = useState(false)
   const [autoSearchEnabled, setAutoSearchEnabled] = useState(false)
   const [webSearchSettings, setWebSearchSettings] = useState<WebSearchSettings | null>(null)
-  
+
   // Persona state management
   const [personaPrompt, setPersonaPrompt] = useState<string>('')
   const [personaEnabled, setPersonaEnabled] = useState<boolean>(false)
-  
+
   const streamingContentRef = useRef<string>('')
   const toolExecutor = useRef(new ToolExecutor(pluginManager))
   const autoSearchManager = useRef(new AutoSearchManager())
@@ -70,16 +70,16 @@ export function useChatWithTools(pluginManager: PluginManager) {
       const serialized = JSON.stringify(sessions)
       const sizeInBytes = new Blob([serialized]).size
       const sizeInMB = sizeInBytes / (1024 * 1024)
-      
+
       // Warn if approaching localStorage limits (typically 5-10MB)
       if (sizeInMB > 4) {
         console.warn(`Session storage size is ${sizeInMB.toFixed(2)}MB. Consider clearing old sessions with images.`)
       }
-      
+
       localStorage.setItem('chat-sessions', serialized)
     } catch (error) {
       console.error('Failed to save sessions to localStorage:', error)
-      
+
       // Check if it's a quota exceeded error
       if (error instanceof DOMException && (
         error.name === 'QuotaExceededError' ||
@@ -98,19 +98,19 @@ export function useChatWithTools(pluginManager: PluginManager) {
         const serialized = JSON.stringify(currentSession)
         const sizeInBytes = new Blob([serialized]).size
         const sizeInMB = sizeInBytes / (1024 * 1024)
-        
+
         // Warn if session is very large
         if (sizeInMB > 2) {
           console.warn(`Current session size is ${sizeInMB.toFixed(2)}MB. Images are contributing to storage size.`)
         }
-        
+
         localStorage.setItem('current-session', serialized)
       } else {
         localStorage.removeItem('current-session')
       }
     } catch (error) {
       console.error('Failed to save current session to localStorage:', error)
-      
+
       // Check if it's a quota exceeded error
       if (error instanceof DOMException && (
         error.name === 'QuotaExceededError' ||
@@ -126,11 +126,11 @@ export function useChatWithTools(pluginManager: PluginManager) {
   useEffect(() => {
     if (settingsInitialized.current) return
     settingsInitialized.current = true
-    
+
     const settings = loadWebSearchSettings()
     setWebSearchSettings(settings)
     setAutoSearchEnabled(settings.autoSearchEnabled)
-    
+
     // Apply settings to AutoSearchManager
     autoSearchManager.current.configure({
       enabled: settings.autoSearchEnabled,
@@ -169,7 +169,7 @@ export function useChatWithTools(pluginManager: PluginManager) {
     setWebSearchSettings(newSettings)
     setAutoSearchEnabled(newSettings.autoSearchEnabled)
     saveWebSearchSettings(newSettings)
-    
+
     // Apply settings to AutoSearchManager
     autoSearchManager.current.configure({
       enabled: newSettings.autoSearchEnabled,
@@ -213,7 +213,16 @@ export function useChatWithTools(pluginManager: PluginManager) {
   }, [])
 
   const updatePersona = useCallback((prompt: string, enabled: boolean) => {
-    if (!currentSession) return
+    if (!currentSession) {
+      console.warn('[updatePersona] No current session')
+      return
+    }
+
+    console.log('[updatePersona] Updating persona:', {
+      sessionId: currentSession.id,
+      prompt: prompt.substring(0, 50) + '...',
+      enabled
+    })
 
     // Update sessions state
     setSessions(prev =>
@@ -225,13 +234,16 @@ export function useChatWithTools(pluginManager: PluginManager) {
     )
 
     // Update current session
-    setCurrentSession(prev =>
-      prev ? { ...prev, personaPrompt: prompt, personaEnabled: enabled } : null
-    )
+    setCurrentSession(prev => {
+      if (!prev) return null
+      return { ...prev, personaPrompt: prompt, personaEnabled: enabled }
+    })
 
-    // Update local state
+    // Update local state immediately
     setPersonaPrompt(prompt)
     setPersonaEnabled(enabled)
+
+    console.log('[updatePersona] Persona updated successfully')
   }, [currentSession])
 
   const combineSystemPrompts = useCallback((globalPrompt: string, personaPrompt: string, personaEnabled: boolean): string => {
@@ -260,7 +272,7 @@ export function useChatWithTools(pluginManager: PluginManager) {
           : s
       )
     )
-    
+
     setCurrentSession(prev => {
       if (prev?.id === sessionId) {
         return { ...prev, messages: [...prev.messages, message], updatedAt: Date.now() }
@@ -274,16 +286,16 @@ export function useChatWithTools(pluginManager: PluginManager) {
       prev.map(s =>
         s.id === sessionId
           ? {
-              ...s,
-              messages: s.messages.map(m =>
-                m.id === messageId ? { ...m, content } : m
-              ),
-              updatedAt: Date.now(),
-            }
+            ...s,
+            messages: s.messages.map(m =>
+              m.id === messageId ? { ...m, content } : m
+            ),
+            updatedAt: Date.now(),
+          }
           : s
       )
     )
-    
+
     setCurrentSession(prev => {
       if (prev?.id === sessionId) {
         return {
@@ -306,7 +318,7 @@ export function useChatWithTools(pluginManager: PluginManager) {
     sessionId: string
   ): Promise<ToolCallResult[]> => {
     console.log(`Executing ${toolCalls.length} tool calls...`)
-    
+
     // Add a system message indicating tool execution
     const toolExecutionMessage: Message = {
       id: generateId(),
@@ -321,10 +333,10 @@ export function useChatWithTools(pluginManager: PluginManager) {
 
     // Add tool results as system messages
     for (const result of results) {
-      const content = result.error 
+      const content = result.error
         ? `Tool execution failed: ${result.error}`
         : `Tool result: ${result.result}`
-        
+
       const resultMessage: Message = {
         id: generateId(),
         role: 'system',
@@ -345,58 +357,58 @@ export function useChatWithTools(pluginManager: PluginManager) {
     if (!message || message.trim().length === 0) {
       return 'New Chat'
     }
-    
+
     let cleaned = message.trim()
-    
+
     // Step 1: Remove markdown code blocks and replace with placeholder
     // Multi-line code blocks: ```code```
     cleaned = cleaned.replace(/```[\s\S]*?```/g, '[code]')
-    
+
     // Inline code: `code`
     cleaned = cleaned.replace(/`[^`]+`/g, '[code]')
-    
+
     // Step 2: Remove other markdown formatting
     // Images: ![alt](url) - must come before links to avoid conflicts
     cleaned = cleaned.replace(/!\[[^\]]*\]\([^)]+\)/g, '[image]')
-    
+
     // Links: [text](url)
     cleaned = cleaned.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-    
+
     // Headers: # Header
     cleaned = cleaned.replace(/^#{1,6}\s+/gm, '')
-    
+
     // Bold: **text** or __text__
     cleaned = cleaned.replace(/\*\*([^*]+)\*\*/g, '$1')
     cleaned = cleaned.replace(/__([^_]+)__/g, '$1')
-    
+
     // Italic: *text* or _text_
     cleaned = cleaned.replace(/\*([^*]+)\*/g, '$1')
     cleaned = cleaned.replace(/_([^_]+)_/g, '$1')
-    
+
     // Strikethrough: ~~text~~
     cleaned = cleaned.replace(/~~([^~]+)~~/g, '$1')
-    
+
     // Blockquotes: > text
     cleaned = cleaned.replace(/^>\s+/gm, '')
-    
+
     // Lists: - item or * item or 1. item
     cleaned = cleaned.replace(/^[\s]*[-*+]\s+/gm, '')
     cleaned = cleaned.replace(/^[\s]*\d+\.\s+/gm, '')
-    
+
     // Step 3: Normalize whitespace (replace multiple spaces/newlines with single space)
     cleaned = cleaned.replace(/\s+/g, ' ').trim()
-    
+
     // Step 4: If still empty after cleaning, return default
     if (cleaned.length === 0) {
       return 'New Chat'
     }
-    
+
     // Step 5: Truncate to reasonable length (50 chars) at word boundary
     if (cleaned.length > 50) {
       // Try to find last space before 50 chars
       const truncated = cleaned.slice(0, 50)
       const lastSpace = truncated.lastIndexOf(' ')
-      
+
       if (lastSpace > 20) {
         // Use word boundary if it's not too early
         cleaned = truncated.slice(0, lastSpace) + '...'
@@ -405,13 +417,13 @@ export function useChatWithTools(pluginManager: PluginManager) {
         cleaned = truncated + '...'
       }
     }
-    
+
     // Step 6: Final validation - ensure we have something readable
     // If title is just placeholders or very short, use a more descriptive default
     if (cleaned === '[code]' || cleaned === '[image]' || cleaned.length < 3) {
       return 'New Chat'
     }
-    
+
     return cleaned
   }
 
@@ -421,11 +433,11 @@ export function useChatWithTools(pluginManager: PluginManager) {
    */
   const cleanAndValidateTitle = (rawTitle: string): string | null => {
     if (!rawTitle) return null
-    
+
     let cleaned = rawTitle.trim()
-    
+
     // Step 1: Try to extract title from {title}...{/title} tags first
-    // This is the preferred format for reasoning models
+    // This is the preferred format for all models
     const titleMatch = cleaned.match(/\{title\}([\s\S]*?)\{\/title\}/i)
     if (titleMatch) {
       // Extract content between tags (even if empty)
@@ -433,52 +445,67 @@ export function useChatWithTools(pluginManager: PluginManager) {
       // If empty after extraction, return null early
       if (cleaned.length === 0) return null
     } else {
-      // Fallback: Remove reasoning content from reasoning models (o1, o3, qwen, etc.)
-      // These models wrap reasoning in <think>...</think> tags
-      
-      // Remove complete <think>...</think> pairs
-      cleaned = cleaned.replace(/<think>[\s\S]*?<\/think>/g, '').trim()
-      
-      // Remove incomplete/unclosed <think> tags (happens when max_tokens cuts off response)
-      cleaned = cleaned.replace(/<think>[\s\S]*$/g, '').trim()
-      
-      // Remove any stray closing tags
-      cleaned = cleaned.replace(/<\/think>/g, '').trim()
+      // Fallback: Try to extract from incomplete {title} tag (if response was cut off)
+      const incompleteTitleMatch = cleaned.match(/\{title\}([\s\S]*?)$/i)
+      if (incompleteTitleMatch) {
+        cleaned = incompleteTitleMatch[1].trim()
+      } else {
+        // Remove reasoning content from reasoning models (o1, o3, qwen, etc.)
+        // These models wrap reasoning in <think>...</think> tags
+
+        // Remove complete <think>...</think> pairs
+        cleaned = cleaned.replace(/<think>[\s\S]*?<\/think>/g, '').trim()
+
+        // Remove incomplete/unclosed <think> tags (happens when max_tokens cuts off response)
+        cleaned = cleaned.replace(/<think>[\s\S]*$/g, '').trim()
+
+        // Remove any stray closing tags
+        cleaned = cleaned.replace(/<\/think>/g, '').trim()
+      }
     }
-    
+
     // Step 2: Trim whitespace
     cleaned = cleaned.trim()
-    
+
     // Step 3: Remove surrounding quotes (single, double, and smart quotes)
     // Handle multiple layers of quotes
     while (cleaned.length > 0 && /^["'`''""«»]/.test(cleaned) && /["'`''""«»]$/.test(cleaned)) {
       cleaned = cleaned.slice(1, -1).trim()
     }
-    
+
     // Step 4: Normalize whitespace (replace multiple spaces/tabs/newlines with single space)
     cleaned = cleaned.replace(/\s+/g, ' ')
-    
+
     // Step 5: Remove or replace problematic special characters
     // Keep alphanumeric, spaces, and common punctuation (.,!?-:)
     cleaned = cleaned.replace(/[^\w\s.,!?:\-']/g, '')
-    
+
     // Step 6: Final trim after character removal
     cleaned = cleaned.trim()
-    
+
+    // Step 7: Remove common placeholder words that models sometimes include
+    // Remove "Title:", "Summary:", etc. at the start
+    cleaned = cleaned.replace(/^(title|summary|topic|subject|heading):\s*/i, '')
+
+    // Remove standalone words like "Title" or "Summary" if that's all there is
+    if (/^(title|summary|topic|subject|heading)$/i.test(cleaned)) {
+      return null
+    }
+
     // Validation: Check if title is meaningful
     if (cleaned.length < 3) return null
-    
+
     // Validation: Reject titles that are only punctuation or whitespace
     if (/^[.,!?:\-\s]+$/.test(cleaned)) return null
-    
+
     // Validation: Ensure title has at least one alphanumeric character
     if (!/[a-zA-Z0-9]/.test(cleaned)) return null
-    
-    // Step 7: Limit to 60 characters
+
+    // Step 8: Limit to 60 characters
     if (cleaned.length > 60) {
       cleaned = cleaned.slice(0, 60).trim()
     }
-    
+
     return cleaned
   }
 
@@ -490,12 +517,12 @@ export function useChatWithTools(pluginManager: PluginManager) {
     if (message.length < 10) {
       return message
     }
-    
+
     // Remove markdown code blocks and inline code
     let cleaned = message
       .replace(/```[\s\S]*?```/g, '[code]') // Multi-line code blocks
       .replace(/`[^`]+`/g, '[code]') // Inline code
-    
+
     // Remove markdown formatting
     cleaned = cleaned
       .replace(/#{1,6}\s+/g, '') // Headers
@@ -503,10 +530,10 @@ export function useChatWithTools(pluginManager: PluginManager) {
       .replace(/\*([^*]+)\*/g, '$1') // Italic
       .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // Links
       .replace(/!\[([^\]]*)\]\([^)]+\)/g, '[image]') // Images
-    
+
     // Normalize whitespace
     cleaned = cleaned.replace(/\s+/g, ' ').trim()
-    
+
     // For long messages, take first 200 chars but try to end at a sentence boundary
     if (cleaned.length > 200) {
       const truncated = cleaned.slice(0, 200)
@@ -515,7 +542,7 @@ export function useChatWithTools(pluginManager: PluginManager) {
       const lastQuestion = truncated.lastIndexOf('?')
       const lastExclamation = truncated.lastIndexOf('!')
       const lastSentenceEnd = Math.max(lastPeriod, lastQuestion, lastExclamation)
-      
+
       if (lastSentenceEnd > 50) {
         // Use sentence boundary if it's not too early
         return truncated.slice(0, lastSentenceEnd + 1).trim()
@@ -525,7 +552,7 @@ export function useChatWithTools(pluginManager: PluginManager) {
         return lastSpace > 50 ? truncated.slice(0, lastSpace).trim() : truncated.trim()
       }
     }
-    
+
     return cleaned
   }
 
@@ -540,7 +567,7 @@ export function useChatWithTools(pluginManager: PluginManager) {
   ) => {
     const startTime = Date.now()
     const timeoutMs = 10000 // 10 second timeout
-    
+
     try {
       // Create a timeout promise
       const timeoutPromise = new Promise<never>((_, reject) => {
@@ -548,51 +575,47 @@ export function useChatWithTools(pluginManager: PluginManager) {
           reject(new Error('TIMEOUT'))
         }, timeoutMs)
       })
-      
+
       // Create the title generation promise
       const generatePromise = (async () => {
         const provider = ProviderFactory.createProvider(providerConfig)
-        
+
         // Prepare message content by handling edge cases
         const preparedMessage = prepareMessageForTitle(firstMessage)
-        
-        // Build an improved prompt with examples for consistency
-        // Use {title}...{/title} tags for reliable extraction, especially with reasoning models
-        const titlePrompt = `Generate a concise title for this chat conversation. The title should be 3-6 words and capture the main topic or question.
 
-User's message: "${preparedMessage}"
+        // Extremely simple and direct prompt
+        const titlePrompt = `Summarize this in 3-5 words: "${preparedMessage}"
 
-Examples:
-- "How do I center a div?" → {title}CSS Centering Question{/title}
-- "Explain quantum computing" → {title}Quantum Computing Explanation{/title}
-- "Debug my Python code" → {title}Python Code Debugging{/title}
-- "hi" → {title}General Conversation{/title}
+Format: {title}Your Summary{/title}`
 
-IMPORTANT: You MUST wrap your title in {title} and {/title} tags. You may think or reason about the title first, but the final title must be wrapped in these tags.
-
-Format: {title}Your Title Here{/title}`
-        
         const response = await provider.sendMessage(
           {
             model,
             messages: [
-              { role: 'user', content: titlePrompt }
+              {
+                role: 'system',
+                content: 'Summarize messages in 3-5 words. Use format: {title}Summary{/title}'
+              },
+              {
+                role: 'user',
+                content: titlePrompt
+              }
             ],
             stream: false,
-            temperature: 0.7,
-            max_tokens: 50  // Increased to allow reasoning models to complete their response
+            temperature: 0.1,  // Very low temperature for consistent, focused titles
+            max_tokens: 50  // Short response needed
           },
-          () => {}
+          () => { }
         )
-        
+
         return response
       })()
-      
+
       // Race between timeout and generation
       const response = await Promise.race([generatePromise, timeoutPromise])
-      
+
       const elapsedTime = Date.now() - startTime
-      
+
       if (response) {
         const cleanTitle = cleanAndValidateTitle(response)
         if (cleanTitle) {
@@ -624,7 +647,7 @@ Format: {title}Your Title Here{/title}`
       }
     } catch (error) {
       const elapsedTime = Date.now() - startTime
-      
+
       // Categorize and log errors with detailed context
       if (error instanceof Error && error.message === 'TIMEOUT') {
         console.error(`[Title Generation] TIMEOUT: Title generation exceeded ${timeoutMs}ms limit`, {
@@ -678,7 +701,7 @@ Format: {title}Your Title Here{/title}`
           fallbackBehavior: 'Keeping fallback title'
         })
       }
-      
+
       // Keep the fallback title - no action needed as it's already set
     }
   }
@@ -714,9 +737,9 @@ Format: {title}Your Title Here{/title}`
 
     // Check if user message already exists
     const hasUserMessage = session.messages.some(m => m.role === 'user' && m.content === processedContent)
-    
+
     let userMessage: Message
-    
+
     if (!hasUserMessage) {
       userMessage = {
         id: generateId(),
@@ -737,7 +760,7 @@ Format: {title}Your Title Here{/title}`
       // Use enhanced fallback title initially
       const fallbackTitle = generateFallbackTitle(content)
       updateSessionTitle(session.id, fallbackTitle)
-      
+
       // Generate better title in background using AI
       generateSessionTitle(session.id, content, providerConfig, model).catch(err => {
         console.error('Failed to generate session title:', err)
@@ -767,7 +790,7 @@ Format: {title}Your Title Here{/title}`
 
         if (shouldSearch) {
           console.log('Auto-search triggered for query:', content)
-          
+
           // Add "Searching..." system message
           const searchingMessage: Message = {
             id: generateId(),
@@ -777,14 +800,14 @@ Format: {title}Your Title Here{/title}`
             status: 'searching'
           }
           addMessage(session.id, searchingMessage)
-          
+
           const searchStartTime = Date.now()
-          
+
           // Perform search
           searchContext = await autoSearchManager.current.performSearch(content)
-          
+
           const searchTime = Date.now() - searchStartTime
-          
+
           // Remove the searching message after completion
           if (searchContext) {
             // Remove the searching message from sessions
@@ -792,13 +815,13 @@ Format: {title}Your Title Here{/title}`
               prev.map(s =>
                 s.id === session.id
                   ? {
-                      ...s,
-                      messages: s.messages.filter(m => m.id !== searchingMessage.id)
-                    }
+                    ...s,
+                    messages: s.messages.filter(m => m.id !== searchingMessage.id)
+                  }
                   : s
               )
             )
-            
+
             // Also remove from current session
             setCurrentSession(prev => {
               if (prev?.id === session.id) {
@@ -809,10 +832,10 @@ Format: {title}Your Title Here{/title}`
               }
               return prev
             })
-            
+
             // Inject context into user message (lazy-loaded formatter)
             enhancedContent = await autoSearchManager.current.injectContext(content, searchContext)
-          
+
             // Store search metadata for use in callbacks
             const searchMetadata = {
               triggered: true,
@@ -821,29 +844,29 @@ Format: {title}Your Title Here{/title}`
               chunkCount: searchContext.chunks.length,
               searchTime
             }
-            
+
             // Update user message with autoSearch metadata
             setSessions(prev =>
               prev.map(s =>
                 s.id === session.id
                   ? {
-                      ...s,
-                      messages: s.messages.map(m =>
-                        m.id === userMessage.id
-                          ? {
-                              ...m,
-                              metadata: {
-                                ...m.metadata,
-                                autoSearch: searchMetadata
-                              }
-                            }
-                          : m
-                      )
-                    }
+                    ...s,
+                    messages: s.messages.map(m =>
+                      m.id === userMessage.id
+                        ? {
+                          ...m,
+                          metadata: {
+                            ...m.metadata,
+                            autoSearch: searchMetadata
+                          }
+                        }
+                        : m
+                    )
+                  }
                   : s
               )
             )
-            
+
             // Also update current session
             setCurrentSession(prev => {
               if (prev?.id === session.id) {
@@ -852,19 +875,19 @@ Format: {title}Your Title Here{/title}`
                   messages: prev.messages.map(m =>
                     m.id === userMessage.id
                       ? {
-                          ...m,
-                          metadata: {
-                            ...m.metadata,
-                            autoSearch: searchMetadata
-                          }
+                        ...m,
+                        metadata: {
+                          ...m.metadata,
+                          autoSearch: searchMetadata
                         }
+                      }
                       : m
                   )
                 }
               }
               return prev
             })
-            
+
             console.log('Auto-search completed:', {
               sources: searchContext.sources.length,
               chunks: searchContext.chunks.length,
@@ -875,24 +898,24 @@ Format: {title}Your Title Here{/title}`
       }
 
       const provider = ProviderFactory.createProvider(providerConfig)
-      
+
       // Build messages
       // Exclude the current user message from previous messages (we'll add it with enhanced content)
       const previousMessages = session.messages.filter(m => m.id !== userMessage.id)
-      
+
       let messages: Array<{ role: "user" | "assistant" | "system"; content: string; images?: ImageAttachment[] }> = []
-      
+
       // Combine system prompts and add as first message
       // IMPORTANT: Use session's persona settings, not local state
       const sessionPersonaPrompt = session.personaPrompt || ''
       const sessionPersonaEnabled = session.personaEnabled || false
-      
+
       const combinedSystemPrompt = combineSystemPrompts(
         GLOBAL_SYSTEM_PROMPT,
         sessionPersonaPrompt,
         sessionPersonaEnabled
       )
-      
+
       // Debug logging for persona
       if (isPersonaDebugEnabled()) {
         const debugInfo = debugPersonaState(
@@ -904,14 +927,14 @@ Format: {title}Your Title Here{/title}`
         )
         logPersonaDebug(debugInfo)
       }
-      
+
       console.log('[useChatWithTools] Using persona from session:', {
         sessionId: session.id,
         personaEnabled: sessionPersonaEnabled,
         promptLength: sessionPersonaPrompt.length,
         combinedPromptLength: combinedSystemPrompt.length
       })
-      
+
       // Add system message only if not already present in previous messages
       const hasSystemMessage = previousMessages.some(m => m.role === 'system')
       if (!hasSystemMessage) {
@@ -920,21 +943,21 @@ Format: {title}Your Title Here{/title}`
           content: combinedSystemPrompt,
         })
       }
-      
+
       // Add previous messages (excluding system messages to avoid duplication)
       messages.push(...previousMessages.filter(m => m.role !== 'system').map(m => ({
         role: m.role as "user" | "assistant" | "system",
         content: m.content,
         images: m.images,
       })))
-      
+
       // Always add current user message with enhanced content (if search was performed, it contains web context)
       console.log('[useChatWithTools] Adding user message')
       console.log('[useChatWithTools] Enhanced content length:', enhancedContent.length)
       console.log('[useChatWithTools] Enhanced content preview:', enhancedContent.substring(0, 500))
       console.log('[useChatWithTools] Search was performed:', searchContext !== null)
       console.log('[useChatWithTools] Images attached:', images?.length || 0)
-      
+
       messages.push({
         role: userMessage.role,
         content: enhancedContent,
@@ -956,26 +979,26 @@ Format: {title}Your Title Here{/title}`
       const chunkQueue: string[] = []
       let isProcessingQueue = false
       let streamingComplete = false
-      
+
       const processQueue = () => {
         if (chunkQueue.length === 0) {
           isProcessingQueue = false
           return
         }
-        
+
         isProcessingQueue = true
         const chunk = chunkQueue.shift()!
         streamingContentRef.current += chunk
         updateMessage(session.id, assistantMessage.id, streamingContentRef.current)
-        
+
         let delay = streamingComplete && chunkQueue.length > 20 ? 5 : 20
         setTimeout(processQueue, delay)
       }
-      
+
       console.log('[useChatWithTools] Sending messages to provider:', messages.length, 'messages')
       console.log('[useChatWithTools] Last message content length:', messages[messages.length - 1]?.content.length)
       console.log('[useChatWithTools] Last message preview:', messages[messages.length - 1]?.content.substring(0, 300))
-      
+
       await provider.sendMessage(
         {
           model,
@@ -990,14 +1013,14 @@ Format: {title}Your Title Here{/title}`
           }
         }
       )
-      
+
       streamingComplete = true
-      
+
       // Wait for queue to finish
       while (chunkQueue.length > 0 || isProcessingQueue) {
         await new Promise(resolve => setTimeout(resolve, 10))
       }
-      
+
       // Process AI response through plugins (processIncoming)
       let processedResponse = streamingContentRef.current
       try {
@@ -1013,9 +1036,9 @@ Format: {title}Your Title Here{/title}`
       } catch (error) {
         console.error('[useChatWithTools] Error processing incoming message:', error)
       }
-      
+
       updateMessage(session.id, assistantMessage.id, processedResponse)
-      
+
       // Calculate token usage and citation metadata after streaming completes
       try {
         // Include the assistant's response in the token calculation
@@ -1026,13 +1049,13 @@ Format: {title}Your Title Here{/title}`
             content: processedResponse
           }
         ]
-        
+
         const tokenUsage = Tokenizer.countMessageTokens(
           messagesWithResponse,
           model,
           providerConfig.type
         )
-        
+
         // Extract citation metadata from the assistant's response
         const { CitationParser } = await import('../lib/citations/citationParser')
         const citations = CitationParser.parse(processedResponse)
@@ -1040,40 +1063,16 @@ Format: {title}Your Title Here{/title}`
           sourceIds: CitationParser.extractSourceIds(processedResponse),
           citationCount: citations.length
         } : undefined
-        
+
         // Update assistant message with token usage and citation metadata
         setSessions(prev =>
           prev.map(s =>
             s.id === session.id
               ? {
-                  ...s,
-                  messages: s.messages.map(m =>
-                    m.id === assistantMessage.id
-                      ? {
-                          ...m,
-                          metadata: {
-                            ...m.metadata,
-                            tokenUsage,
-                            model,
-                            provider: providerConfig.type,
-                            citations: citationMetadata
-                          }
-                        }
-                      : m
-                  )
-                }
-              : s
-          )
-        )
-        
-        // Also update current session
-        setCurrentSession(prev => {
-          if (prev?.id === session.id) {
-            return {
-              ...prev,
-              messages: prev.messages.map(m =>
-                m.id === assistantMessage.id
-                  ? {
+                ...s,
+                messages: s.messages.map(m =>
+                  m.id === assistantMessage.id
+                    ? {
                       ...m,
                       metadata: {
                         ...m.metadata,
@@ -1083,13 +1082,37 @@ Format: {title}Your Title Here{/title}`
                         citations: citationMetadata
                       }
                     }
+                    : m
+                )
+              }
+              : s
+          )
+        )
+
+        // Also update current session
+        setCurrentSession(prev => {
+          if (prev?.id === session.id) {
+            return {
+              ...prev,
+              messages: prev.messages.map(m =>
+                m.id === assistantMessage.id
+                  ? {
+                    ...m,
+                    metadata: {
+                      ...m.metadata,
+                      tokenUsage,
+                      model,
+                      provider: providerConfig.type,
+                      citations: citationMetadata
+                    }
+                  }
                   : m
               )
             }
           }
           return prev
         })
-        
+
         console.log('[Token Usage] Calculated tokens:', tokenUsage)
         if (citationMetadata) {
           console.log('[Citations] Extracted citation metadata:', citationMetadata)
@@ -1098,7 +1121,7 @@ Format: {title}Your Title Here{/title}`
         console.warn('[Token Usage] Failed to calculate token usage:', error)
         // Gracefully handle error - token usage will remain undefined
       }
-      
+
     } catch (error) {
       console.error('Failed to send message:', error)
       const errorMessage: Message = {

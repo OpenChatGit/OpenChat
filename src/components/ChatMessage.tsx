@@ -132,11 +132,15 @@ export function ChatMessage({ message, rendererPlugins = [], previousMessage, so
             lineHeight: '1.75'
           }}
         >
-          {content.split('\n').map((line, i) => (
-            <p key={i} className={i > 0 ? 'mt-4' : ''}>
-              {line || '\u00A0'}
-            </p>
-          ))}
+          {content.split('\n').map((line, i) => {
+            // Normalize whitespace: replace multiple spaces with single space
+            const normalizedLine = line.replace(/\s+/g, ' ').trim()
+            return (
+              <p key={i} className={i > 0 ? 'mt-4' : ''}>
+                {normalizedLine || '\u00A0'}
+              </p>
+            )
+          })}
         </div>
       )
     }
@@ -154,11 +158,15 @@ export function ChatMessage({ message, rendererPlugins = [], previousMessage, so
             lineHeight: '1.75'
           }}
         >
-          {content.split('\n').map((line, i) => (
-            <p key={i} className={i > 0 ? 'mt-4' : ''}>
-              {line || '\u00A0'}
-            </p>
-          ))}
+          {content.split('\n').map((line, i) => {
+            // Normalize whitespace: replace multiple spaces with single space
+            const normalizedLine = line.replace(/\s+/g, ' ').trim()
+            return (
+              <p key={i} className={i > 0 ? 'mt-4' : ''}>
+                {normalizedLine || '\u00A0'}
+              </p>
+            )
+          })}
         </div>
       )
     }
@@ -196,11 +204,15 @@ export function ChatMessage({ message, rendererPlugins = [], previousMessage, so
           lineHeight: '1.75'
         }}
       >
-        {processedContent.split('\n').map((line, i) => (
-          <p key={i} className={i > 0 ? 'mt-4' : ''}>
-            {line || '\u00A0'}
-          </p>
-        ))}
+        {processedContent.split('\n').map((line, i) => {
+          // Normalize whitespace: replace multiple spaces with single space
+          const normalizedLine = line.replace(/\s+/g, ' ').trim()
+          return (
+            <p key={i} className={i > 0 ? 'mt-4' : ''}>
+              {normalizedLine || '\u00A0'}
+            </p>
+          )
+        })}
       </div>
     )
   }
@@ -374,7 +386,7 @@ export function ChatMessage({ message, rendererPlugins = [], previousMessage, so
               style={{ backgroundColor: '#2F2F2F' }}
             >
               {message.images && message.images.length > 0 && renderImages(message.images)}
-              <div className="text-sm whitespace-pre-wrap break-words" style={{ color: 'var(--color-foreground)' }}>
+              <div className="text-sm break-words" style={{ color: 'var(--color-foreground)' }}>
                 {message.content}
               </div>
             </div>

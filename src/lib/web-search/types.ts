@@ -175,6 +175,6 @@ export const DEFAULT_RAG_CONFIG: RAGConfig = {
 
 export const DEFAULT_SEARCH_OPTIONS: SearchOptions = {
   maxResults: 5,
-  timeout: 30000, // 30 seconds
+  timeout: 45000, // 45 seconds (increased for slow sites)
   forceSearch: false
 };

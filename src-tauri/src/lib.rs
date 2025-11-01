@@ -609,7 +609,7 @@ async fn scrape_urls(
     max_retries: Option<u32>,
     max_concurrent: Option<usize>,
 ) -> Result<Vec<ScrapeResult>, String> {
-    let timeout_ms = timeout_ms.unwrap_or(30000); // Default 30 seconds
+    let timeout_ms = timeout_ms.unwrap_or(45000); // Default 45 seconds (increased for slow sites like GitHub)
     let max_retries = max_retries.unwrap_or(3); // Default 3 retries
     let max_concurrent = max_concurrent.unwrap_or(5); // Default 5 concurrent requests
     
@@ -650,7 +650,7 @@ async fn scrape_url(
     timeout_ms: Option<u64>,
     max_retries: Option<u32>,
 ) -> Result<ScrapeResult, String> {
-    let timeout_ms = timeout_ms.unwrap_or(30000);
+    let timeout_ms = timeout_ms.unwrap_or(45000); // Increased for slow sites
     let max_retries = max_retries.unwrap_or(3);
     
     Ok(scrape_url_async(url, timeout_ms, max_retries).await)

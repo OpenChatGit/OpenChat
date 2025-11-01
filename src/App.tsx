@@ -231,8 +231,14 @@ function App() {
         onClose={() => setIsPersonaSidebarOpen(false)}
         personaPrompt={personaPrompt}
         personaEnabled={personaEnabled}
-        onPersonaPromptChange={(prompt) => updatePersona(prompt, personaEnabled)}
-        onPersonaEnabledChange={(enabled) => updatePersona(personaPrompt, enabled)}
+        onPersonaPromptChange={(prompt) => {
+          // Use callback form to ensure we get the latest state
+          updatePersona(prompt, personaEnabled)
+        }}
+        onPersonaEnabledChange={(enabled) => {
+          // Use callback form to ensure we get the latest state
+          updatePersona(personaPrompt, enabled)
+        }}
       />
     </div>
   )
