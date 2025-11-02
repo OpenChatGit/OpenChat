@@ -17,6 +17,8 @@ export interface TokenUsage {
   inputTokens: number;
   outputTokens: number;
   totalTokens: number;
+  tokensPerSecond?: number; // Speed of token generation
+  streamDuration?: number; // Duration of streaming in milliseconds
 }
 
 export interface Message {

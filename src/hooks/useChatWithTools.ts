@@ -979,6 +979,7 @@ Format: {title}Your Summary{/title}`
       const chunkQueue: string[] = []
       let isProcessingQueue = false
       let streamingComplete = false
+      const streamStartTime = Date.now() // Track streaming start time
 
       const processQueue = () => {
         if (chunkQueue.length === 0) {
@@ -1041,6 +1042,10 @@ Format: {title}Your Summary{/title}`
 
       // Calculate token usage and citation metadata after streaming completes
       try {
+        // Calculate streaming duration and tokens per second
+        const streamEndTime = Date.now()
+        const streamDuration = streamEndTime - streamStartTime
+
         // Include the assistant's response in the token calculation
         const messagesWithResponse = [
           ...messages,
@@ -1055,6 +1060,18 @@ Format: {title}Your Summary{/title}`
           model,
           providerConfig.type
         )
+
+        // Calculate tokens per second (only for output tokens)
+        const tokensPerSecond = streamDuration > 0 
+          ? (tokenUsage.outputTokens / (streamDuration / 1000))
+          : 0
+
+        // Add streaming metrics to token usage
+        const tokenUsageWithMetrics = {
+          ...tokenUsage,
+          tokensPerSecond: Math.round(tokensPerSecond * 100) / 100, // Round to 2 decimal places
+          streamDuration
+        }
 
         // Extract citation metadata from the assistant's response
         const { CitationParser } = await import('../lib/citations/citationParser')
@@ -1076,7 +1093,7 @@ Format: {title}Your Summary{/title}`
                       ...m,
                       metadata: {
                         ...m.metadata,
-                        tokenUsage,
+                        tokenUsage: tokenUsageWithMetrics,
                         model,
                         provider: providerConfig.type,
                         citations: citationMetadata
@@ -1100,7 +1117,7 @@ Format: {title}Your Summary{/title}`
                     ...m,
                     metadata: {
                       ...m.metadata,
-                      tokenUsage,
+                      tokenUsage: tokenUsageWithMetrics,
                       model,
                       provider: providerConfig.type,
                       citations: citationMetadata
@@ -1113,7 +1130,7 @@ Format: {title}Your Summary{/title}`
           return prev
         })
 
-        console.log('[Token Usage] Calculated tokens:', tokenUsage)
+        console.log('[Token Usage] Calculated tokens:', tokenUsageWithMetrics)
         if (citationMetadata) {
           console.log('[Citations] Extracted citation metadata:', citationMetadata)
         }
@@ -1148,6 +1165,67 @@ Format: {title}Your Summary{/title}`
     return autoSearchManager.current.getOrchestrator().getSourceRegistry()
   }, [])
 
+  /**
+   * Regenerate a specific assistant message
+   */
+  const regenerateMessage = useCallback(async (
+    messageId: string,
+    providerConfig: ProviderConfig,
+    model: string
+  ) => {
+    const session = currentSession
+    if (!session) return
+
+    // Find the assistant message to regenerate
+    const messageIndex = session.messages.findIndex(m => m.id === messageId)
+    if (messageIndex === -1) return
+
+    const messageToRegenerate = session.messages[messageIndex]
+    if (messageToRegenerate.role !== 'assistant') return
+
+    // Find the previous user message
+    let userMessageIndex = messageIndex - 1
+    while (userMessageIndex >= 0 && session.messages[userMessageIndex].role !== 'user') {
+      userMessageIndex--
+    }
+
+    if (userMessageIndex < 0) return
+
+    const userMessage = session.messages[userMessageIndex]
+
+    // Remove the assistant message and all messages after it
+    const messagesBeforeAssistant = session.messages.slice(0, messageIndex)
+    
+    // Update session with messages up to (but not including) the assistant message
+    setSessions(prev =>
+      prev.map(s =>
+        s.id === session.id
+          ? { ...s, messages: messagesBeforeAssistant, updatedAt: Date.now() }
+          : s
+      )
+    )
+    setCurrentSession(prev =>
+      prev?.id === session.id
+        ? { ...prev, messages: messagesBeforeAssistant, updatedAt: Date.now() }
+        : prev
+    )
+
+    // Create a temporary session with the truncated messages for regeneration
+    const tempSession: ChatSession = {
+      ...session,
+      messages: messagesBeforeAssistant
+    }
+
+    // Regenerate by sending the user message again
+    await sendMessage(
+      userMessage.content,
+      providerConfig,
+      model,
+      tempSession,
+      userMessage.images
+    )
+  }, [currentSession, sendMessage, setSessions, setCurrentSession])
+
   return {
     sessions,
     currentSession,
@@ -1159,6 +1237,7 @@ Format: {title}Your Summary{/title}`
     updateWebSearchSettings,
     createSession,
     sendMessage,
+    regenerateMessage,
     deleteSession,
     updateSessionTitle,
     personaPrompt,

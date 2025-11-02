@@ -48,6 +48,7 @@ function App() {
     updateWebSearchSettings,
     createSession,
     sendMessage,
+    regenerateMessage,
     deleteSession,
     updateSessionTitle,
     personaPrompt,
@@ -176,6 +177,11 @@ function App() {
           isGenerating={isGenerating}
           onSendMessage={handleSendMessage}
           onSendMessageWithNewChat={handleSendMessageWithNewChat}
+          onRegenerateMessage={(messageId) => {
+            if (selectedProvider && selectedModel) {
+              regenerateMessage(messageId, selectedProvider, selectedModel)
+            }
+          }}
           rendererPlugins={pluginManager.getByType<RendererPlugin>('renderer')}
           providers={providers}
           selectedProvider={selectedProvider}

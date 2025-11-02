@@ -5,6 +5,8 @@ interface TokenUsageDropdownProps {
     inputTokens: number
     outputTokens: number
     totalTokens: number
+    tokensPerSecond?: number
+    streamDuration?: number
   }
   isOpen: boolean
   onToggle: () => void
@@ -102,6 +104,22 @@ export function TokenUsageDropdown({ tokenUsage, isOpen, onToggle }: TokenUsageD
                 {tokenUsage.totalTokens.toLocaleString()} tokens
               </span>
             </div>
+            
+            {tokenUsage.tokensPerSecond !== undefined && (
+              <div 
+                className="flex justify-between items-center pt-1.5 mt-1.5"
+                style={{ borderTop: '1px solid rgba(255, 255, 255, 0.1)' }}
+              >
+                <span className="font-medium">Speed:</span>
+                <span 
+                  className="font-semibold tabular-nums" 
+                  style={{ color: 'var(--color-foreground)' }}
+                  aria-label={`${tokenUsage.tokensPerSecond} tokens per second`}
+                >
+                  {tokenUsage.tokensPerSecond.toFixed(2)} tokens/s
+                </span>
+              </div>
+            )}
           </div>
         ) : (
           <div className="text-sm" style={{ color: 'var(--color-muted-foreground)' }}>
