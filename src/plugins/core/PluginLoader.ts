@@ -278,8 +278,8 @@ export class PluginLoader {
   /**
    * Load built-in plugins from bundled directory
    * 
-   * In development: Load from src/plugins/builtin/
-   * In production: Load from bundled resources directory
+   * Built-in plugins are imported directly as TypeScript classes
+   * and instantiated here.
    * 
    * @returns Array of loaded built-in plugin instances
    */
@@ -288,30 +288,25 @@ export class PluginLoader {
     const plugins: BasePlugin[] = []
 
     try {
-      const builtinDir = await this.getBuiltinPluginsDirectory()
+      // Import built-in plugins from their directories
+      const { MarkdownRendererPlugin } = await import('../builtin/markdown-renderer')
       
-      if (!builtinDir) {
-        console.warn('[PluginLoader] No built-in plugins directory found')
-        return plugins
+      // Instantiate markdown renderer
+      const markdownPlugin = new MarkdownRendererPlugin()
+      plugins.push(markdownPlugin)
+      console.log(`[PluginLoader] Loaded built-in plugin: ${markdownPlugin.metadata.id}`)
+      
+      // Load timestamp plugin (uses PluginExecutor)
+      try {
+        const { createTimestampPlugin } = await import('../builtin/TimestampPluginWrapper')
+        const timestampPlugin = await createTimestampPlugin()
+        plugins.push(timestampPlugin)
+        console.log(`[PluginLoader] Loaded built-in plugin: ${timestampPlugin.metadata.id}`)
+      } catch (error) {
+        console.error('[PluginLoader] Failed to load timestamp plugin:', error)
       }
 
-      // Scan for plugin directories
-      const pluginDirs = await this.scanPluginDirectory(builtinDir)
-      
-      console.log(`[PluginLoader] Found ${pluginDirs.length} built-in plugin directories`)
-
-      // Load each plugin
-      for (const dir of pluginDirs) {
-        try {
-          const plugin = await this.loadPlugin(dir, true)
-          if (plugin) {
-            plugins.push(plugin)
-            console.log(`[PluginLoader] Loaded built-in plugin: ${plugin.metadata.id}`)
-          }
-        } catch (error) {
-          console.error(`[PluginLoader] Failed to load built-in plugin from ${dir}:`, error)
-        }
-      }
+      console.log(`[PluginLoader] Successfully loaded ${plugins.length} built-in plugins`)
 
     } catch (error) {
       console.error('[PluginLoader] Error loading built-in plugins:', error)

@@ -27,21 +27,21 @@ interface ChatInputProps {
   onCapabilitiesChange?: (capabilities: ModelInfo['capabilities']) => void
 }
 
-export function ChatInput({ 
-  onSend, 
-  disabled, 
-  isGenerating, 
+export function ChatInput({
+  onSend,
+  disabled,
+  isGenerating,
   centered = false,
   providers = [],
   selectedProvider = null,
   selectedModel = '',
   models = [],
-  onSelectProvider = () => {},
-  onSelectModel = () => {},
-  onLoadModels = () => {},
+  onSelectProvider = () => { },
+  onSelectModel = () => { },
+  onLoadModels = () => { },
   isLoadingModels = false,
   autoSearchEnabled = false,
-  onToggleAutoSearch = () => {},
+  onToggleAutoSearch = () => { },
   modelCapabilities,
   onCapabilitiesChange
 }: ChatInputProps) {
@@ -53,7 +53,7 @@ export function ChatInput({
       return ''
     }
   })
-  
+
   const [attachedImages, setAttachedImages] = useState<ImageAttachment[]>(() => {
     try {
       const saved = localStorage.getItem('chat-input-images')
@@ -62,13 +62,13 @@ export function ChatInput({
       return []
     }
   })
-  
+
   const [isProcessingImage, setIsProcessingImage] = useState(false)
   const [uploadStatus, setUploadStatus] = useState<string>('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { showError, showInfo } = useToast()
-  
+
   // Save input to localStorage whenever it changes
   useEffect(() => {
     try {
@@ -81,7 +81,7 @@ export function ChatInput({
       console.error('Failed to save input draft:', error)
     }
   }, [input])
-  
+
   // Save attached images to localStorage whenever they change
   useEffect(() => {
     try {
@@ -97,18 +97,18 @@ export function ChatInput({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     // Prevent sending images to non-vision models
     if (attachedImages.length > 0 && !modelCapabilities?.vision) {
       showError('Cannot send images with the selected model. Please select a vision-capable model.')
       return
     }
-    
+
     if (input.trim() && !disabled) {
       onSend(input.trim(), attachedImages.length > 0 ? attachedImages : undefined)
       setInput('')
       setAttachedImages([])
-      
+
       // Clear localStorage drafts after sending
       try {
         localStorage.removeItem('chat-input-draft')
@@ -116,7 +116,7 @@ export function ChatInput({
       } catch (error) {
         console.error('Failed to clear input drafts:', error)
       }
-      
+
       if (textareaRef.current) {
         textareaRef.current.style.height = 'auto'
       }
@@ -191,7 +191,7 @@ export function ChatInput({
 
     const fileArray = Array.from(files)
     const imageFiles = fileArray.filter(file => file.type.startsWith('image/'))
-    
+
     if (imageFiles.length === 0) {
       showError('No valid image files found')
       setUploadStatus('Error: No valid image files')
@@ -204,7 +204,7 @@ export function ChatInput({
     try {
       const newImages: ImageAttachment[] = []
       let errorCount = 0
-      
+
       for (const file of imageFiles) {
         try {
           const attachment = await ImageProcessor.processImage(file)
@@ -217,7 +217,7 @@ export function ChatInput({
 
       if (newImages.length > 0) {
         setAttachedImages(prev => [...prev, ...newImages])
-        const successMessage = errorCount > 0 
+        const successMessage = errorCount > 0
           ? `${newImages.length} image(s) attached successfully, ${errorCount} failed`
           : `${newImages.length} image(s) attached successfully`
         setUploadStatus(successMessage)
@@ -296,17 +296,17 @@ export function ChatInput({
     <div className={centered ? '' : 'pb-6 px-4'}>
       <div className={centered ? 'w-full' : 'max-w-3xl mx-auto'}>
         {/* Screen reader announcements for upload status */}
-        <div 
-          role="status" 
-          aria-live="polite" 
+        <div
+          role="status"
+          aria-live="polite"
           aria-atomic="true"
           className="sr-only"
         >
           {uploadStatus}
         </div>
-        
+
         {/* Modern Island Container */}
-        <div 
+        <div
           className="rounded-3xl shadow-lg"
           style={{ backgroundColor: '#2C2C2E', overflow: 'visible' }}
           onDragOver={handleDragOver}
@@ -315,7 +315,7 @@ export function ChatInput({
           <form onSubmit={handleSubmit}>
             {/* Image Previews */}
             {attachedImages.length > 0 && (
-              <div 
+              <div
                 className="px-6 pt-4 pb-2 flex flex-wrap gap-2"
                 role="list"
                 aria-label={`${attachedImages.length} image(s) attached`}
@@ -376,86 +376,86 @@ export function ChatInput({
               )}
               style={{ color: 'var(--color-foreground)' }}
             />
-            
+
             {/* Bottom Section with Web Search Toggle, Attachment, Model Selector and Send Button */}
             <div className="px-4 pb-3 flex items-center justify-between gap-2">
-                {/* Left Side: Web Search Toggle and Attachment */}
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={onToggleAutoSearch}
-                    className="w-8 h-8 rounded-full flex items-center justify-center transition-all flex-shrink-0 hover:bg-white/10"
-                    title={autoSearchEnabled ? 'Web search enabled' : 'Web search disabled'}
-                    aria-label={autoSearchEnabled ? 'Disable web search' : 'Enable web search'}
-                  >
-                    <Globe 
-                      className="w-4 h-4 transition-colors"
-                      style={{ 
-                        color: autoSearchEnabled ? 'rgb(59, 130, 246)' : '#8E8E93',
-                        strokeWidth: 2
-                      }}
-                    />
-                  </button>
-
-                  {/* Attachment Button */}
-                  <button
-                    type="button"
-                    onClick={handleAttachmentClick}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault()
-                        handleAttachmentClick()
-                      }
+              {/* Left Side: Web Search Toggle and Attachment */}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={onToggleAutoSearch}
+                  className="w-8 h-8 rounded-full flex items-center justify-center transition-all flex-shrink-0 hover:bg-white/10"
+                  title={autoSearchEnabled ? 'Web search enabled' : 'Web search disabled'}
+                  aria-label={autoSearchEnabled ? 'Disable web search' : 'Enable web search'}
+                >
+                  <Globe
+                    className="w-4 h-4 transition-colors"
+                    style={{
+                      color: autoSearchEnabled ? 'rgb(59, 130, 246)' : '#8E8E93',
+                      strokeWidth: 2
                     }}
-                    disabled={!isVisionSupported || isProcessingImage}
-                    className="w-8 h-8 rounded-full flex items-center justify-center transition-all flex-shrink-0 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
-                    title={
-                      !isVisionSupported 
-                        ? 'Image attachments require a vision-capable model' 
-                        : isProcessingImage 
-                        ? 'Processing image...' 
-                        : attachedImages.length > 0
-                        ? `${attachedImages.length} image(s) attached`
-                        : 'Attach image'
-                    }
-                    aria-label={
-                      !isVisionSupported 
-                        ? 'Attach image - requires vision-capable model' 
-                        : isProcessingImage 
-                        ? 'Processing image, please wait' 
-                        : attachedImages.length > 0
-                        ? `Attach image - ${attachedImages.length} image(s) currently attached`
-                        : 'Attach image'
-                    }
-                    aria-disabled={!isVisionSupported || isProcessingImage}
-                  >
-                    <Paperclip 
-                      className="w-4 h-4 transition-colors"
-                      style={{ 
-                        color: attachedImages.length > 0 ? 'rgb(59, 130, 246)' : isVisionSupported ? '#8E8E93' : '#565656',
-                        strokeWidth: 2
-                      }}
-                      aria-hidden="true"
-                    />
-                  </button>
-
-                  {/* Hidden File Input */}
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/jpeg,image/png,image/gif,image/webp"
-                    multiple
-                    onChange={handleFileSelect}
-                    className="hidden"
-                    aria-label="Select image files to attach"
-                    tabIndex={-1}
                   />
-                </div>
+                </button>
 
-                {/* Right Side: Model Selector and Send Button */}
-                <div className="flex items-center gap-2">
-                  {/* Model Selector */}
-                  {providers.length > 0 && (
+                {/* Attachment Button */}
+                <button
+                  type="button"
+                  onClick={handleAttachmentClick}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      handleAttachmentClick()
+                    }
+                  }}
+                  disabled={!isVisionSupported || isProcessingImage}
+                  className="w-8 h-8 rounded-full flex items-center justify-center transition-all flex-shrink-0 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={
+                    !isVisionSupported
+                      ? 'Image attachments require a vision-capable model'
+                      : isProcessingImage
+                        ? 'Processing image...'
+                        : attachedImages.length > 0
+                          ? `${attachedImages.length} image(s) attached`
+                          : 'Attach image'
+                  }
+                  aria-label={
+                    !isVisionSupported
+                      ? 'Attach image - requires vision-capable model'
+                      : isProcessingImage
+                        ? 'Processing image, please wait'
+                        : attachedImages.length > 0
+                          ? `Attach image - ${attachedImages.length} image(s) currently attached`
+                          : 'Attach image'
+                  }
+                  aria-disabled={!isVisionSupported || isProcessingImage}
+                >
+                  <Paperclip
+                    className="w-4 h-4 transition-colors"
+                    style={{
+                      color: attachedImages.length > 0 ? 'rgb(59, 130, 246)' : isVisionSupported ? '#8E8E93' : '#565656',
+                      strokeWidth: 2
+                    }}
+                    aria-hidden="true"
+                  />
+                </button>
+
+                {/* Hidden File Input */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/gif,image/webp"
+                  multiple
+                  onChange={handleFileSelect}
+                  className="hidden"
+                  aria-label="Select image files to attach"
+                  tabIndex={-1}
+                />
+              </div>
+
+              {/* Right Side: Model Selector and Send Button */}
+              <div className="flex items-center gap-2">
+                {/* Model Selector */}
+                {providers.length > 0 && (
                   <ModelSelector
                     providers={providers}
                     selectedProvider={selectedProvider}
@@ -468,29 +468,29 @@ export function ChatInput({
                     openUpwards={!centered}
                     onCapabilitiesChange={onCapabilitiesChange}
                   />
-                  )}
-                  
-                  {/* Send/Stop Button */}
-                  <button
-                    type="submit"
-                    disabled={!input.trim() || disabled || isGenerating}
-                    className="w-8 h-8 rounded-full flex items-center justify-center transition-all flex-shrink-0"
+                )}
+
+                {/* Send/Stop Button */}
+                <button
+                  type="submit"
+                  disabled={!input.trim() || disabled || isGenerating}
+                  className="w-8 h-8 rounded-full flex items-center justify-center transition-all flex-shrink-0"
+                  style={{
+                    backgroundColor: input.trim() && !disabled && !isGenerating ? '#FFFFFF' : '#1A1A1C',
+                    cursor: input.trim() && !disabled && !isGenerating ? 'pointer' : 'not-allowed'
+                  }}
+                  title="Send message"
+                  aria-label="Send message"
+                >
+                  <FontAwesomeIcon
+                    icon={faArrowUp}
+                    className="w-4 h-4"
                     style={{
-                      backgroundColor: input.trim() && !disabled && !isGenerating ? '#FFFFFF' : '#1A1A1C',
-                      cursor: input.trim() && !disabled && !isGenerating ? 'pointer' : 'not-allowed'
+                      color: input.trim() && !disabled && !isGenerating ? '#000000' : '#565656'
                     }}
-                    title="Send message"
-                    aria-label="Send message"
-                  >
-                    <FontAwesomeIcon 
-                      icon={faArrowUp} 
-                      className="w-4 h-4"
-                      style={{ 
-                        color: input.trim() && !disabled && !isGenerating ? '#000000' : '#565656'
-                      }}
-                    />
-                  </button>
-                </div>
+                  />
+                </button>
+              </div>
             </div>
           </form>
         </div>

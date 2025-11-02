@@ -188,13 +188,17 @@ export class PluginManager {
 
     // Call onLoad hook
     try {
+      console.log(`[PluginManager] Calling onLoad() for plugin: ${id}`)
       if (plugin.onLoad) {
         await plugin.onLoad(pluginContext)
+        console.log(`[PluginManager] onLoad() completed for plugin: ${id}`)
+      } else {
+        console.warn(`[PluginManager] Plugin ${id} has no onLoad() method`)
       }
     } catch (error) {
       plugin.metadata.error = `Failed to load: ${error}`
       plugin.metadata.loaded = false
-      console.error(`Plugin ${id} failed to load:`, error)
+      console.error(`[PluginManager] Plugin ${id} failed to load:`, error)
       throw error
     }
 

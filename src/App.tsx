@@ -132,7 +132,7 @@ function App() {
 
   return (
     <div className="flex h-screen overflow-hidden text-foreground relative" style={{ backgroundColor: 'var(--color-main)' }}>
-      {/* Sidebar */}
+      {/* Left Sidebar */}
       <div 
         className="flex-shrink-0 transition-all duration-300 ease-in-out"
         style={{ 
@@ -151,6 +151,10 @@ function App() {
           onOpenSettings={() => setShowSettings(true)}
           onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
           onOpenUpdate={() => setShowUpdateModal(true)}
+          onOpenBrowser={() => {
+            // Browser functionality - to be implemented
+            console.log('Browser button clicked')
+          }}
         />
       </div>
 
@@ -168,9 +172,8 @@ function App() {
         </button>
       )}
 
-      {/* Main Chat Area */}
+      {/* Main Content Area - Chat */}
       <div className="flex-1 flex flex-col min-w-0" style={{ backgroundColor: 'var(--color-main)' }}>
-        {/* Chat */}
         <ChatArea
           session={currentSession}
           isGenerating={isGenerating}
