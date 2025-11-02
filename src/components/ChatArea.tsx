@@ -12,6 +12,7 @@ interface ChatAreaProps {
   isGenerating: boolean
   onSendMessage: (content: string, images?: ImageAttachment[]) => void
   onSendMessageWithNewChat: (content: string, images?: ImageAttachment[]) => void
+  onRegenerateMessage?: (messageId: string) => void
   rendererPlugins?: RendererPlugin[]
   providers: ProviderConfig[]
   selectedProvider: ProviderConfig | null
@@ -33,6 +34,7 @@ export function ChatArea({
   isGenerating, 
   onSendMessage, 
   onSendMessageWithNewChat,
+  onRegenerateMessage,
   rendererPlugins = [],
   providers,
   selectedProvider,
@@ -150,6 +152,8 @@ export function ChatArea({
                       rendererPlugins={rendererPlugins}
                       previousMessage={previousMessage}
                       sourceRegistry={getSourceRegistry()}
+                      onRegenerateMessage={onRegenerateMessage}
+                      isGenerating={isGenerating}
                     />
                   )}
                 </div>

@@ -17,9 +17,11 @@ interface ChatMessageProps {
   rendererPlugins?: RendererPlugin[]
   previousMessage?: Message // To access autoSearch metadata from previous user message
   sourceRegistry?: SourceRegistry // Optional: For rendering citations
+  onRegenerateMessage?: (messageId: string) => void
+  isGenerating?: boolean
 }
 
-export function ChatMessage({ message, rendererPlugins = [], previousMessage, sourceRegistry }: ChatMessageProps) {
+export function ChatMessage({ message, rendererPlugins = [], previousMessage, sourceRegistry, onRegenerateMessage, isGenerating = false }: ChatMessageProps) {
   const isUser = message.role === 'user'
   const [isCopied, setIsCopied] = useState(false)
   const [lightboxImage, setLightboxImage] = useState<ImageAttachment | null>(null)
@@ -593,8 +595,18 @@ export function ChatMessage({ message, rendererPlugins = [], previousMessage, so
             
             {/* Refresh Button */}
             <button
-              className="p-1.5 rounded hover:bg-white/10 transition-colors"
-              title="Regenerate"
+              onClick={() => {
+                if (onRegenerateMessage && !isGenerating) {
+                  onRegenerateMessage(message.id)
+                }
+              }}
+              disabled={isGenerating}
+              className={`p-1.5 rounded transition-colors ${
+                isGenerating 
+                  ? 'opacity-50 cursor-not-allowed' 
+                  : 'hover:bg-white/10 cursor-pointer'
+              }`}
+              title={isGenerating ? "Generating..." : "Regenerate"}
             >
               <img src={refreshIcon} alt="Refresh" className="w-4 h-4" />
             </button>
