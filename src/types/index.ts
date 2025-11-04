@@ -66,6 +66,7 @@ export interface ChatSession {
   updatedAt: number;
   personaPrompt?: string;
   personaEnabled?: boolean;
+   systemPrompt?: string;
 }
 
 export interface ModelInfo {

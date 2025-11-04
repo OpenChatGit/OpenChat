@@ -17,7 +17,8 @@ function App() {
   const [showUpdateModal, setShowUpdateModal] = useState(false)
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
   const [isPersonaSidebarOpen, setIsPersonaSidebarOpen] = useState(false)
-  
+ 
+
   const { 
     pluginManager, 
     plugins, 
@@ -92,7 +93,7 @@ function App() {
 
   const handleNewChat = () => {
     if (!selectedProvider || !selectedModel) {
-      // Show settings if no provider/model is configured
+      
       setShowSettings(true)
       return
     }
@@ -103,30 +104,47 @@ function App() {
 
   const handleSendMessage = async (content: string, images?: ImageAttachment[]) => {
     if (!selectedProvider || !selectedModel || !currentSession) return
-    await sendMessage(content, selectedProvider, selectedModel, currentSession, images)
+    const systemPrompt = localStorage.getItem('systemPrompt') || ''
+    await sendMessage(content, selectedProvider, selectedModel, currentSession, images, systemPrompt)
+    return
   }
 
   const handleSendMessageWithNewChat = async (content: string, images?: ImageAttachment[]) => {
-    if (!selectedProvider || !selectedModel) {
-      setShowSettings(true)
-      return
-    }
-    
-    // Create user message first with stable, unique ID
-    const userMessage = {
-      id: `${Date.now()}-init`,
-      role: 'user' as const,
-      content,
-      timestamp: Date.now(),
-      images: images && images.length > 0 ? images : undefined,
-    }
-    
-    // Create session WITH the user message already in it
-    const session = createSession(selectedProvider, selectedModel, userMessage)
-    
-    // Now send to AI (reuse existing user message to avoid duplicates)
-    await sendMessage(content, selectedProvider, selectedModel, session, images)
+  if (!selectedProvider || !selectedModel) {
+    setShowSettings(true)
+    return
   }
+
+  const systemPrompt = localStorage.getItem('systemPrompt') || ''
+
+  
+  const userMessage = {
+    id: `${Date.now()}-init`,
+    role: 'user' as const,
+    content,
+    timestamp: Date.now(),
+    images: images && images.length > 0 ? images : undefined,
+  }
+
+  
+  const session = createSession(
+    selectedProvider,
+    selectedModel,
+    userMessage,
+    
+  )
+
+  
+  await sendMessage(
+    content,
+    selectedProvider,
+    selectedModel,
+    session,
+    images,
+    systemPrompt 
+  )
+}
+
 
   const togglePersonaSidebar = () => {
     setIsPersonaSidebarOpen(!isPersonaSidebarOpen)

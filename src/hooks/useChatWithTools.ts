@@ -16,7 +16,8 @@ import { debugPersonaState, logPersonaDebug, isPersonaDebugEnabled } from '../li
 
 // Global system prompt constant
 // This can be customized in the future to allow user-defined global prompts
-const GLOBAL_SYSTEM_PROMPT = "You are a helpful AI assistant."
+export const DEFAULT_SYSTEM_PROMPT = "You are a helpful AI assistant."
+
 
 export function useChatWithTools(pluginManager: PluginManager) {
   // Load sessions from localStorage on initial mount
@@ -714,7 +715,8 @@ Format: {title}Your Summary{/title}`
     providerConfig: ProviderConfig,
     model: string,
     targetSession?: ChatSession,
-    images?: ImageAttachment[]
+    images?: ImageAttachment[],
+    systemPrompt?: string
   ) => {
     const session = targetSession || currentSession
     if (!session) return
@@ -906,15 +908,23 @@ Format: {title}Your Summary{/title}`
       let messages: Array<{ role: "user" | "assistant" | "system"; content: string; images?: ImageAttachment[] }> = []
 
       // Combine system prompts and add as first message
-      // IMPORTANT: Use session's persona settings, not local state
+      // Include user-defined systemPrompt if provided
       const sessionPersonaPrompt = session.personaPrompt || ''
       const sessionPersonaEnabled = session.personaEnabled || false
 
+      let baseSystemPrompt = DEFAULT_SYSTEM_PROMPT
+
+      if (systemPrompt?.trim()) {
+      baseSystemPrompt = systemPrompt.trim()
+      } else if (session.systemPrompt?.trim()) {
+        baseSystemPrompt = session.systemPrompt.trim()
+      }
       const combinedSystemPrompt = combineSystemPrompts(
-        GLOBAL_SYSTEM_PROMPT,
+        baseSystemPrompt,
         sessionPersonaPrompt,
         sessionPersonaEnabled
       )
+
 
       // Debug logging for persona
       if (isPersonaDebugEnabled()) {
