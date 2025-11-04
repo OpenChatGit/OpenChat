@@ -1,6 +1,6 @@
 // Core types for the modular provider system
 
-export type ProviderType = 'ollama' | 'lmstudio' | 'llamacpp' | 'koboldcpp' | 'textgen-webui' | 'anthropic' | 'openai';
+export type ProviderType = 'ollama' | 'lmstudio' | 'llamacpp' | 'koboldcpp' | 'textgen-webui' | 'anthropic' | 'openai' | 'openrouter';
 
 export interface ImageAttachment {
   id: string;

@@ -425,6 +425,7 @@ export class PluginLoader {
    * 
    * @returns Directory path or null
    */
+  // @ts-ignore - Reserved for future use
   private async getBuiltinPluginsDirectory(): Promise<string | null> {
     try {
       // Check if we're in Tauri (production build)

@@ -385,10 +385,13 @@ export function ChatMessage({ message, rendererPlugins = [], previousMessage, so
           <div className="max-w-3xl mx-auto flex flex-col items-end">
             <div 
               className="max-w-[70%] rounded-3xl px-5 py-3"
-              style={{ backgroundColor: '#2F2F2F' }}
+              style={{ 
+                backgroundColor: 'var(--color-user-bubble)',
+                color: 'var(--color-user-bubble-text)'
+              }}
             >
               {message.images && message.images.length > 0 && renderImages(message.images)}
-              <div className="text-sm break-words" style={{ color: 'var(--color-foreground)' }}>
+              <div className="text-sm break-words">
                 {message.content}
               </div>
             </div>
@@ -406,7 +409,7 @@ export function ChatMessage({ message, rendererPlugins = [], previousMessage, so
     return (
       <div className="px-4 py-2">
         <div className="max-w-3xl mx-auto">
-          <div className="flex items-center gap-2 text-sm text-gray-400 mb-1">
+          <div className="flex items-center gap-2 text-sm mb-1" style={{ color: 'var(--color-muted-foreground)' }}>
             <svg className="w-3.5 h-3.5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
@@ -429,7 +432,7 @@ export function ChatMessage({ message, rendererPlugins = [], previousMessage, so
         <div className="max-w-3xl mx-auto" style={{ minHeight: '2rem' }}>
           {/* Searched Web Indicator - only show after search completes */}
           {hasCompletedSearch && (
-          <div className="flex items-center gap-2 text-sm text-gray-400 mb-1">
+          <div className="flex items-center gap-2 text-sm mb-1" style={{ color: 'var(--color-muted-foreground)' }}>
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
@@ -480,7 +483,7 @@ export function ChatMessage({ message, rendererPlugins = [], previousMessage, so
           {(() => {
             if (message.status === 'cancelled') {
               return (
-                <div className="flex items-center gap-2 text-sm text-gray-400">
+                <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--color-muted-foreground)' }}>
                   <span>Generation cancelled</span>
                 </div>
               )
@@ -490,8 +493,8 @@ export function ChatMessage({ message, rendererPlugins = [], previousMessage, so
             // If no content yet, show "Reasoning..." indicator
             if (!contentToRender) {
               return (
-                <div className="flex items-center gap-2 text-sm text-gray-400">
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-pulse"></div>
+                <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--color-muted-foreground)' }}>
+                  <div className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: 'var(--color-muted-foreground)' }}></div>
                   <span>Reasoning...</span>
                 </div>
               )
@@ -502,8 +505,8 @@ export function ChatMessage({ message, rendererPlugins = [], previousMessage, so
             // If parsing returns empty but we have content starting with <think>, show reasoning indicator
             if (parts.length === 0 && hasReasoningTag) {
               return (
-                <div className="flex items-center gap-2 text-sm text-gray-400">
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-pulse"></div>
+                <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--color-muted-foreground)' }}>
+                  <div className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: 'var(--color-muted-foreground)' }}></div>
                   <span>Reasoning...</span>
                 </div>
               )
@@ -512,8 +515,8 @@ export function ChatMessage({ message, rendererPlugins = [], previousMessage, so
             // If no parts and no reasoning tag, show generating
             if (parts.length === 0) {
               return (
-                <div className="flex items-center gap-2 text-sm text-gray-400">
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-pulse"></div>
+                <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--color-muted-foreground)' }}>
+                  <div className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: 'var(--color-muted-foreground)' }}></div>
                   <span>Generating...</span>
                 </div>
               )

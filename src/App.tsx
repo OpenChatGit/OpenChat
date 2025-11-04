@@ -92,6 +92,7 @@ function App() {
 
   const handleNewChat = () => {
     if (!selectedProvider || !selectedModel) {
+      // Show settings if no provider/model is configured
       setShowSettings(true)
       return
     }
@@ -153,7 +154,7 @@ function App() {
           onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
           onOpenUpdate={() => setShowUpdateModal(true)}
           onOpenBrowser={() => {
-            // Browser functionality - to be implemented
+            // Browser functionality - placeholder for future implementation
             console.log('Browser button clicked')
           }}
         />

@@ -307,8 +307,12 @@ export function ChatInput({
 
         {/* Modern Island Container */}
         <div
-          className="rounded-3xl shadow-lg"
-          style={{ backgroundColor: '#2C2C2E', overflow: 'visible' }}
+          className="rounded-3xl shadow-lg border"
+          style={{ 
+            backgroundColor: 'var(--color-input-container)',
+            borderColor: 'var(--color-input-border)',
+            overflow: 'visible' 
+          }}
           onDragOver={handleDragOver}
           onDrop={handleDrop}
         >
@@ -324,7 +328,7 @@ export function ChatInput({
                   <div
                     key={image.id}
                     className="relative group rounded-lg overflow-hidden"
-                    style={{ backgroundColor: '#1A1A1C' }}
+                    style={{ backgroundColor: 'var(--color-muted)' }}
                     role="listitem"
                   >
                     <img
@@ -384,14 +388,17 @@ export function ChatInput({
                 <button
                   type="button"
                   onClick={onToggleAutoSearch}
-                  className="w-8 h-8 rounded-full flex items-center justify-center transition-all flex-shrink-0 hover:bg-white/10"
+                  className="w-8 h-8 rounded-full flex items-center justify-center transition-all flex-shrink-0 input-icon-button"
+                  style={{
+                    backgroundColor: autoSearchEnabled ? 'rgba(59, 130, 246, 0.1)' : 'transparent'
+                  }}
                   title={autoSearchEnabled ? 'Web search enabled' : 'Web search disabled'}
                   aria-label={autoSearchEnabled ? 'Disable web search' : 'Enable web search'}
                 >
                   <Globe
                     className="w-4 h-4 transition-colors"
                     style={{
-                      color: autoSearchEnabled ? 'rgb(59, 130, 246)' : '#8E8E93',
+                      color: autoSearchEnabled ? 'rgb(59, 130, 246)' : 'var(--color-icon-muted)',
                       strokeWidth: 2
                     }}
                   />
@@ -408,7 +415,10 @@ export function ChatInput({
                     }
                   }}
                   disabled={!isVisionSupported || isProcessingImage}
-                  className="w-8 h-8 rounded-full flex items-center justify-center transition-all flex-shrink-0 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-8 h-8 rounded-full flex items-center justify-center transition-all flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed input-icon-button"
+                  style={{
+                    backgroundColor: attachedImages.length > 0 ? 'rgba(59, 130, 246, 0.1)' : 'transparent'
+                  }}
                   title={
                     !isVisionSupported
                       ? 'Image attachments require a vision-capable model'
@@ -432,7 +442,7 @@ export function ChatInput({
                   <Paperclip
                     className="w-4 h-4 transition-colors"
                     style={{
-                      color: attachedImages.length > 0 ? 'rgb(59, 130, 246)' : isVisionSupported ? '#8E8E93' : '#565656',
+                      color: attachedImages.length > 0 ? 'rgb(59, 130, 246)' : isVisionSupported ? 'var(--color-icon-muted)' : 'var(--color-icon-disabled)',
                       strokeWidth: 2
                     }}
                     aria-hidden="true"
@@ -476,7 +486,7 @@ export function ChatInput({
                   disabled={!input.trim() || disabled || isGenerating}
                   className="w-8 h-8 rounded-full flex items-center justify-center transition-all flex-shrink-0"
                   style={{
-                    backgroundColor: input.trim() && !disabled && !isGenerating ? '#FFFFFF' : '#1A1A1C',
+                    backgroundColor: input.trim() && !disabled && !isGenerating ? 'var(--color-send-button)' : 'var(--color-send-button-disabled)',
                     cursor: input.trim() && !disabled && !isGenerating ? 'pointer' : 'not-allowed'
                   }}
                   title="Send message"
@@ -486,7 +496,7 @@ export function ChatInput({
                     icon={faArrowUp}
                     className="w-4 h-4"
                     style={{
-                      color: input.trim() && !disabled && !isGenerating ? '#000000' : '#565656'
+                      color: input.trim() && !disabled && !isGenerating ? 'var(--color-send-button-icon)' : 'var(--color-icon-disabled)'
                     }}
                   />
                 </button>

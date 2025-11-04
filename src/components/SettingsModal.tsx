@@ -12,6 +12,7 @@ import { cn } from '../lib/utils'
 import { Settings as SettingsContent } from './Settings'
 import { WebSearchSettings, type WebSearchSettings as WebSearchSettingsType } from './WebSearchSettings'
 import { PluginDocumentation } from './PluginDocumentation'
+import { ProviderSettings } from './ProviderSettings'
 
 interface SettingsModalProps {
   // Settings props
@@ -27,33 +28,34 @@ interface SettingsModalProps {
   onTestProvider: (provider: ProviderConfig) => Promise<boolean>
   onLoadModels: (provider: ProviderConfig) => void
   onUpdateWebSearchSettings?: (settings: WebSearchSettingsType) => void
-  
+
   // Plugin props
   plugins: BasePlugin[]
   onEnablePlugin: (pluginId: string) => void
   onDisablePlugin: (pluginId: string) => void
   onReloadPlugin: (pluginId: string) => Promise<void>
   onCreateTemplatePlugin?: (pluginName: string) => Promise<void>
-  
+
   // Modal props
   onClose: () => void
 }
 
-type Tab = 'settings' | 'websearch' | 'plugins' | 'plugin-docs-getting-started' | 'plugin-docs-api' | 'plugin-docs-examples' | 'plugin-docs-hooks'
+type Tab = 'settings' | 'websearch' | 'plugins' | 'plugin-docs-getting-started' | 'plugin-docs-api' | 'plugin-docs-examples' | 'plugin-docs-hooks' | 'provider-ollama' | 'provider-openai' | 'provider-anthropic' | 'provider-lmstudio' | 'provider-openrouter'
 type DocPage = 'getting-started' | 'api' | 'examples' | 'hooks'
+type ProviderType = 'ollama' | 'openai' | 'anthropic' | 'lmstudio' | 'openrouter'
 
 export function SettingsModal({
   providers,
-  selectedProvider,
-  models,
+  selectedProvider: _selectedProvider,
+  models: _models,
   selectedModel,
-  isLoadingModels,
+  isLoadingModels: _isLoadingModels,
   webSearchSettings,
-  onSelectProvider,
+  onSelectProvider: _onSelectProvider,
   onSelectModel,
   onUpdateProvider,
   onTestProvider,
-  onLoadModels,
+  onLoadModels: _onLoadModels,
   onUpdateWebSearchSettings,
   plugins,
   onEnablePlugin,
@@ -66,14 +68,24 @@ export function SettingsModal({
   const [builtinExpanded, setBuiltinExpanded] = useState(true)
   const [externalExpanded, setExternalExpanded] = useState(true)
   const [pluginDocsExpanded, setPluginDocsExpanded] = useState(false)
+  const [providersExpanded, setProvidersExpanded] = useState(false)
   const [reloadingPlugins, setReloadingPlugins] = useState<Set<string>>(new Set())
   const [reloadErrors, setReloadErrors] = useState<Record<string, string>>({})
   const [configuringPlugin, setConfiguringPlugin] = useState<BasePlugin | null>(null)
+
+
 
   // Auto-expand plugin docs when a plugin docs tab is active
   useEffect(() => {
     if (pluginDocsTabs.some(t => t.id === activeTab)) {
       setPluginDocsExpanded(true)
+    }
+  }, [activeTab])
+
+  // Auto-expand providers when a provider tab is active
+  useEffect(() => {
+    if (providerTabs.some(t => t.id === activeTab)) {
+      setProvidersExpanded(true)
     }
   }, [activeTab])
 
@@ -88,6 +100,14 @@ export function SettingsModal({
     { id: 'plugin-docs-api' as Tab, label: 'API Reference', docPage: 'api' as DocPage },
     { id: 'plugin-docs-examples' as Tab, label: 'Examples', docPage: 'examples' as DocPage },
     { id: 'plugin-docs-hooks' as Tab, label: 'Hooks Reference', docPage: 'hooks' as DocPage }
+  ]
+
+  const providerTabs = [
+    { id: 'provider-ollama' as Tab, label: 'Ollama', providerType: 'ollama' as ProviderType },
+    { id: 'provider-lmstudio' as Tab, label: 'LM Studio', providerType: 'lmstudio' as ProviderType },
+    { id: 'provider-openai' as Tab, label: 'OpenAI', providerType: 'openai' as ProviderType },
+    { id: 'provider-anthropic' as Tab, label: 'Anthropic', providerType: 'anthropic' as ProviderType },
+    { id: 'provider-openrouter' as Tab, label: 'OpenRouter', providerType: 'openrouter' as ProviderType }
   ]
 
   // Separate plugins into builtin and external
@@ -112,7 +132,7 @@ export function SettingsModal({
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
       console.error(`[SettingsModal] Failed to reload plugin ${pluginId}:`, error)
-      
+
       // Store error for display
       setReloadErrors(prev => ({
         ...prev,
@@ -139,7 +159,7 @@ export function SettingsModal({
   // Handle config save
   const handleConfigSave = (pluginId: string, config: Record<string, any>) => {
     console.log(`[SettingsModal] Config saved for plugin ${pluginId}:`, config)
-    
+
     // Trigger onConfigChange lifecycle hook if plugin has it
     const plugin = plugins.find(p => p.metadata.id === pluginId)
     if (plugin && typeof plugin.onConfigChange === 'function') {
@@ -175,7 +195,47 @@ export function SettingsModal({
                 <span>{tab.label}</span>
               </button>
             ))}
-            
+
+            {/* Providers Dropdown */}
+            <div>
+              <button
+                onClick={() => setProvidersExpanded(!providersExpanded)}
+                className={cn(
+                  'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
+                  providerTabs.some(t => t.id === activeTab)
+                    ? 'bg-primary/20 text-foreground'
+                    : 'text-muted-foreground hover:bg-white/10 hover:text-foreground'
+                )}
+              >
+                <SettingsIcon className="w-4 h-4" />
+                <span className="flex-1 text-left">Providers</span>
+                {providersExpanded ? (
+                  <ChevronDown className="w-4 h-4" />
+                ) : (
+                  <ChevronRight className="w-4 h-4" />
+                )}
+              </button>
+
+              {providersExpanded && (
+                <div className="ml-4 mt-1 space-y-1">
+                  {providerTabs.map((tab) => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id)}
+                      className={cn(
+                        'w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors',
+                        activeTab === tab.id
+                          ? 'bg-primary text-primary-foreground'
+                          : 'text-muted-foreground hover:bg-white/10 hover:text-foreground'
+                      )}
+                    >
+                      <span className="flex-1 text-left">{tab.label}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {/* Plugin Docs Dropdown */}
             <div>
               <button
@@ -195,7 +255,7 @@ export function SettingsModal({
                   <ChevronRight className="w-4 h-4" />
                 )}
               </button>
-              
+
               {pluginDocsExpanded && (
                 <div className="ml-4 mt-1 space-y-1">
                   {pluginDocsTabs.map((tab) => (
@@ -223,9 +283,10 @@ export function SettingsModal({
           {/* Header */}
           <div className="flex items-center justify-between p-6 border-b border-border flex-shrink-0">
             <h2 className="text-2xl font-semibold">
-              {tabs.find(t => t.id === activeTab)?.label || 
-               pluginDocsTabs.find(t => t.id === activeTab)?.label || 
-               'Plugin Docs'}
+              {tabs.find(t => t.id === activeTab)?.label ||
+                pluginDocsTabs.find(t => t.id === activeTab)?.label ||
+                providerTabs.find(t => t.id === activeTab)?.label ||
+                'Settings'}
             </h2>
             <Button variant="ghost" size="icon" onClick={onClose}>
               <X className="w-5 h-5" />
@@ -236,19 +297,7 @@ export function SettingsModal({
           <div className="flex-1 overflow-y-auto">
             {activeTab === 'settings' && (
               <div className="p-6">
-                <SettingsContent
-                  providers={providers}
-                  selectedProvider={selectedProvider}
-                  models={models}
-                  selectedModel={selectedModel}
-                  isLoadingModels={isLoadingModels}
-                  onClose={onClose}
-                  onSelectProvider={onSelectProvider}
-                  onSelectModel={onSelectModel}
-                  onUpdateProvider={onUpdateProvider}
-                  onTestProvider={onTestProvider}
-                  onLoadModels={onLoadModels}
-                />
+                <SettingsContent />
               </div>
             )}
 
@@ -279,6 +328,35 @@ export function SettingsModal({
                   }}
                   onOpenPluginsFolder={openPluginsDirectory}
                 />
+              </div>
+            )}
+
+            {providerTabs.some(t => t.id === activeTab) && (
+              <div className="p-6">
+                {(() => {
+                  const providerTab = providerTabs.find(t => t.id === activeTab)
+                  const provider = providers.find(p => p.type === providerTab?.providerType)
+
+                  if (!provider || !providerTab) {
+                    return (
+                      <div className="text-center py-12">
+                        <p className="text-muted-foreground">Provider not found</p>
+                      </div>
+                    )
+                  }
+
+                  return (
+                    <ProviderSettings
+                      key={provider.type}
+                      provider={provider}
+                      selectedModel={selectedModel}
+                      onUpdateProvider={onUpdateProvider}
+                      onTestProvider={onTestProvider}
+                      onSelectModel={onSelectModel}
+                      onLoadModels={_onLoadModels}
+                    />
+                  )
+                })()}
               </div>
             )}
 

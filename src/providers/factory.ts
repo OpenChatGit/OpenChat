@@ -6,6 +6,7 @@ import { LMStudioProvider } from './lmstudio'
 import { LlamaCppProvider } from './llamacpp'
 import { OpenAIProvider } from './openai'
 import { AnthropicProvider } from './anthropic'
+import { OpenRouterProvider } from './openrouter'
 
 export class ProviderFactory {
   static createProvider(config: ProviderConfig): BaseProvider {
@@ -20,6 +21,8 @@ export class ProviderFactory {
         return new OpenAIProvider(config)
       case 'anthropic':
         return new AnthropicProvider(config)
+      case 'openrouter':
+        return new OpenRouterProvider(config)
       default:
         throw new Error(`Unsupported provider type: ${config.type}`)
     }
@@ -67,6 +70,12 @@ export class ProviderFactory {
         type: 'openai',
         name: 'OpenAI',
         baseUrl: 'https://api.openai.com/v1',
+        enabled: false,
+      },
+      openrouter: {
+        type: 'openrouter',
+        name: 'OpenRouter',
+        baseUrl: 'https://openrouter.ai',
         enabled: false,
       },
     }

@@ -113,6 +113,7 @@ export default ModernPlugin
 // Usage Examples
 // ============================================================================
 
+// @ts-ignore - Example function for documentation purposes
 async function runExamples() {
   try {
     // Example 1: Class export

@@ -38,6 +38,47 @@ export function ModelSelector({
   const menuRef = useRef<HTMLDivElement>(null)
   const healthMonitor = ProviderHealthMonitor.getInstance()
 
+  // Clean model name by removing provider prefixes
+  const cleanModelName = (modelName: string): string => {
+    // Remove common provider prefixes
+    const prefixes = [
+      'anthropic/',
+      'openai/',
+      'openrouter/',
+      'google/',
+      'meta-llama/',
+      'mistralai/',
+      'cohere/',
+      'ai21/',
+      'huggingface/',
+      'amazon/',
+      'nvidia/',
+      'perplexity/',
+      'deepseek/',
+      'x-ai/',
+      'xai/',
+      'qwen/',
+      'alibaba/',
+      'microsoft/',
+      'meta/',
+      'inflection/',
+      'databricks/',
+      '01-ai/',
+      'cognitivecomputations/',
+      'minimax/',
+    ]
+    
+    let cleaned = modelName
+    for (const prefix of prefixes) {
+      if (cleaned.startsWith(prefix)) {
+        cleaned = cleaned.substring(prefix.length)
+        break
+      }
+    }
+    
+    return cleaned
+  }
+
   // Load initial status from monitor on mount
   useEffect(() => {
     const initialStatus = healthMonitor.getAllStatuses()
@@ -200,6 +241,12 @@ export function ModelSelector({
             <path d="M21.55 10.004a5.416 5.416 0 00-.478-4.501c-1.217-2.09-3.662-3.166-6.05-2.66A5.59 5.59 0 0010.831 1C8.39.995 6.224 2.546 5.473 4.838A5.553 5.553 0 001.76 7.496a5.487 5.487 0 00.691 6.5 5.416 5.416 0 00.477 4.502c1.217 2.09 3.662 3.165 6.05 2.66A5.586 5.586 0 0013.168 23c2.443.006 4.61-1.546 5.361-3.84a5.553 5.553 0 003.715-2.66 5.488 5.488 0 00-.693-6.497v.001zm-8.381 11.558a4.199 4.199 0 01-2.675-.954c.034-.018.093-.05.132-.074l4.44-2.53a.71.71 0 00.364-.623v-6.176l1.877 1.069c.02.01.033.029.036.05v5.115c-.003 2.274-1.87 4.118-4.174 4.123zM4.192 17.78a4.059 4.059 0 01-.498-2.763c.032.02.09.055.131.078l4.44 2.53c.225.13.504.13.73 0l5.42-3.088v2.138a.068.068 0 01-.027.057L9.9 19.288c-1.999 1.136-4.552.46-5.707-1.51h-.001zM3.023 8.216A4.15 4.15 0 015.198 6.41l-.002.151v5.06a.711.711 0 00.364.624l5.42 3.087-1.876 1.07a.067.067 0 01-.063.005l-4.489-2.559c-1.995-1.14-2.679-3.658-1.53-5.63h.001zm15.417 3.54l-5.42-3.088L14.896 7.6a.067.067 0 01.063-.006l4.489 2.557c1.998 1.14 2.683 3.662 1.529 5.633a4.163 4.163 0 01-2.174 1.807V12.38a.71.71 0 00-.363-.623zm1.867-2.773a6.04 6.04 0 00-.132-.078l-4.44-2.53a.731.731 0 00-.729 0l-5.42 3.088V7.325a.068.068 0 01.027-.057L14.1 4.713c2-1.137 4.555-.46 5.707 1.513.487.833.664 1.809.499 2.757h.001zm-11.741 3.81l-1.877-1.068a.065.065 0 01-.036-.051V6.559c.001-2.277 1.873-4.122 4.181-4.12.976 0 1.92.338 2.671.954-.034.018-.092.05-.131.073l-4.44 2.53a.71.71 0 00-.365.623l-.003 6.173v.002zm1.02-2.168L12 9.25l2.414 1.375v2.75L12 14.75l-2.415-1.375v-2.75z"/>
           </svg>
         )
+      case 'openrouter':
+        return (
+          <svg fill="currentColor" fillRule="evenodd" height="20" width="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style={{ minWidth: '20px', minHeight: '20px' }}>
+            <path d="M16.804 1.957l7.22 4.105v.087L16.73 10.21l.017-2.117-.821-.03c-1.059-.028-1.611.002-2.268.11-1.064.175-2.038.577-3.147 1.352L8.345 11.03c-.284.195-.495.336-.68.455l-.515.322-.397.234.385.23.53.338c.476.314 1.17.796 2.701 1.866 1.11.775 2.083 1.177 3.147 1.352l.3.045c.694.091 1.375.094 2.825.033l.022-2.159 7.22 4.105v.087L16.589 22l.014-1.862-.635.022c-1.386.042-2.137.002-3.138-.162-1.694-.28-3.26-.926-4.881-2.059l-2.158-1.5a21.997 21.997 0 00-.755-.498l-.467-.28a55.927 55.927 0 00-.76-.43C2.908 14.73.563 14.116 0 14.116V9.888l.14.004c.564-.007 2.91-.622 3.809-1.124l1.016-.58.438-.274c.428-.28 1.072-.726 2.686-1.853 1.621-1.133 3.186-1.78 4.881-2.059 1.152-.19 1.974-.213 3.814-.138l.02-1.907z"/>
+          </svg>
+        )
       default:
         return null
     }
@@ -213,13 +260,13 @@ export function ModelSelector({
         onClick={() => setIsOpen(!isOpen)}
         className="h-8 px-3 rounded-full flex items-center gap-2 transition-all hover:bg-white/10"
       >
-        <span className="text-xs text-gray-300">
-          {selectedModel && selectedModel.trim() !== '' && selectedModel !== 'llama.cpp-model' && models.some(m => m.name === selectedModel) ? selectedModel : 'Select Model'}
+        <span className="text-xs" style={{ color: 'var(--color-muted-foreground)' }}>
+          {selectedModel && selectedModel.trim() !== '' && selectedModel !== 'llama.cpp-model' && models.some(m => m.name === selectedModel) ? cleanModelName(selectedModel) : 'Select Model'}
         </span>
         <ChevronDown className={cn(
-          "w-3 h-3 text-gray-400 transition-transform",
+          "w-3 h-3 transition-transform",
           isOpen && "rotate-180"
-        )} />
+        )} style={{ color: 'var(--color-muted-foreground)' }} />
       </button>
 
       {/* Dropdown */}
@@ -230,13 +277,14 @@ export function ModelSelector({
             openUpwards ? "bottom-full mb-2" : "top-full mt-2"
           )}
           style={{ 
-            backgroundColor: '#2C2C2E',
+            backgroundColor: 'var(--color-dropdown-bg)',
             minWidth: '300px',
-            maxHeight: '400px'
+            maxHeight: '400px',
+            border: '1px solid var(--color-dropdown-border)'
           }}
         >
           {/* Provider Icons Bar */}
-          <div className="flex items-center justify-center gap-2 p-3 border-b" style={{ borderColor: '#3A3A3C' }}>
+          <div className="flex items-center justify-center gap-2 p-3 border-b" style={{ borderColor: 'var(--color-dropdown-border)' }}>
             {providers.map((provider) => {
               const icon = getProviderIcon(provider.type)
               if (!icon) return null
@@ -265,12 +313,24 @@ export function ModelSelector({
           {/* Models List */}
           <div className="max-h-80 overflow-y-auto">
             {isLoadingModels ? (
-              <div className="p-4 text-center text-gray-500 text-sm">Loading models…</div>
+              <div className="p-4 text-center text-sm" style={{ color: 'var(--color-muted-foreground)' }}>Loading models…</div>
             ) : models.length === 0 ? (
-              <div className="p-4 text-center text-gray-500 text-sm">No models available</div>
-            ) : (
-              <div className="p-2">
-                {models.map((model) => {
+              <div className="p-4 text-center text-sm" style={{ color: 'var(--color-muted-foreground)' }}>No models available</div>
+            ) : (() => {
+              const hiddenModels = selectedProvider?.hiddenModels || []
+              const visibleModels = models.filter(model => !hiddenModels.includes(model.name))
+              
+              if (visibleModels.length === 0) {
+                return (
+                  <div className="p-4 text-center text-sm" style={{ color: 'var(--color-muted-foreground)' }}>
+                    All models are hidden. Enable models in Settings.
+                  </div>
+                )
+              }
+              
+              return (
+                <div className="p-2">
+                  {visibleModels.map((model) => {
                   const hasVision = model.capabilities?.vision ?? false
                   const hasReasoning = model.capabilities?.reasoning ?? false
                   
@@ -290,19 +350,22 @@ export function ModelSelector({
                         className={cn(
                           "w-full text-left px-3 py-2 rounded-lg text-sm transition-all group",
                           selectedModel === model.name
-                            ? "bg-white/20 text-white"
-                            : "text-gray-300 hover:bg-white/10",
+                            ? "bg-white/20"
+                            : "hover:bg-white/10",
                           isBeingDeleted && "opacity-50 cursor-not-allowed"
                         )}
+                        style={{
+                          color: selectedModel === model.name ? 'var(--color-foreground)' : 'var(--color-muted-foreground)'
+                        }}
                         title={tooltip}
                       >
                         <div className="flex items-center gap-2">
                           <div className="flex-1 min-w-0">
                             <div className="font-medium truncate">
-                              {isBeingDeleted ? 'Deleting...' : model.name}
+                              {isBeingDeleted ? 'Deleting...' : cleanModelName(model.name)}
                             </div>
                             {model.size && (
-                              <div className="text-xs text-gray-500 mt-0.5">{model.size}</div>
+                              <div className="text-xs mt-0.5" style={{ color: 'var(--color-muted-foreground)', opacity: 0.7 }}>{model.size}</div>
                             )}
                           </div>
                           <div className="flex items-center gap-1 flex-shrink-0">
@@ -335,8 +398,12 @@ export function ModelSelector({
                       {openMenuModelName === model.name && canDelete && (
                         <div
                           ref={menuRef}
-                          className="absolute right-2 top-full mt-1 z-50 rounded-lg shadow-xl overflow-hidden"
-                          style={{ backgroundColor: '#1C1C1E', minWidth: '150px' }}
+                          className="absolute right-2 top-full mt-1 z-50 rounded-lg shadow-xl overflow-hidden border"
+                          style={{ 
+                            backgroundColor: 'var(--color-dropdown-bg)', 
+                            minWidth: '150px',
+                            borderColor: 'var(--color-dropdown-border)'
+                          }}
                         >
                           <button
                             onClick={(e) => handleDeleteModel(model.name, e)}
@@ -350,8 +417,9 @@ export function ModelSelector({
                     </div>
                   )
                 })}
-              </div>
-            )}
+                </div>
+              )
+            })()}
           </div>
         </div>
       )}

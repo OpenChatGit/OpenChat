@@ -17,8 +17,9 @@ export function useProviders() {
       ProviderFactory.getDefaultConfig('ollama'),
       ProviderFactory.getDefaultConfig('lmstudio'),
       ProviderFactory.getDefaultConfig('llamacpp'),
-      ProviderFactory.getDefaultConfig('anthropic'),
       ProviderFactory.getDefaultConfig('openai'),
+      ProviderFactory.getDefaultConfig('anthropic'),
+      ProviderFactory.getDefaultConfig('openrouter'),
     ]
 
     // Load from localStorage if available
@@ -113,15 +114,18 @@ export function useProviders() {
   useEffect(() => {
     if (!selectedProvider) return
     const cache = loadLocal<Record<string, ModelInfo[]>>('oc.modelCache', {})
-    const cached = cache[selectedProvider.type]
-    if (cached && cached.length > 0) {
-      setModels(cached)
+    const allCached = cache[selectedProvider.type]
+    if (allCached && allCached.length > 0) {
+      // Filter out hidden models from cache
+      const hiddenModels = selectedProvider.hiddenModels || []
+      const visibleCached = allCached.filter(m => !hiddenModels.includes(m.name))
+      setModels(visibleCached)
       
-      // Validate that the selected model exists in the cached list
+      // Validate that the selected model exists in the visible cached list
       if (selectedModel) {
-        const modelExists = cached.some(m => m.name === selectedModel)
+        const modelExists = visibleCached.some(m => m.name === selectedModel)
         if (!modelExists) {
-          // Selected model doesn't exist in cache, clear it
+          // Selected model doesn't exist in visible cache, clear it
           setSelectedModel('')
           saveLocal('selectedModel', '')
         }
@@ -133,7 +137,7 @@ export function useProviders() {
         saveLocal('selectedModel', '')
       }
     }
-  }, [selectedProvider, selectedModel])
+  }, [selectedProvider, selectedProvider?.hiddenModels, selectedModel])
 
   useEffect(() => {
     if (selectedModel) {
@@ -144,28 +148,34 @@ export function useProviders() {
   const loadModels = useCallback(async (providerConfig: ProviderConfig) => {
     setIsLoadingModels(true)
     try {
-      const provider = ProviderFactory.createProvider(providerConfig)
-      const modelList = await provider.listModels()
-      setModels(modelList)
+      // Temporarily remove hiddenModels to get ALL models from provider
+      const tempProvider = { ...providerConfig, hiddenModels: [] }
+      const provider = ProviderFactory.createProvider(tempProvider)
+      const allModels = await provider.listModels()
+      
+      // Filter out hidden models for display
+      const hiddenModels = providerConfig.hiddenModels || []
+      const visibleModels = allModels.filter(m => !hiddenModels.includes(m.name))
+      setModels(visibleModels)
 
-      // Update cache for fast restore after refresh
+      // Update cache with ALL models (not filtered) for fast restore after refresh
       const cache = loadLocal<Record<string, ModelInfo[]>>('oc.modelCache', {})
-      cache[providerConfig.type] = modelList
+      cache[providerConfig.type] = allModels
       saveLocal('oc.modelCache', cache)
       
-      // Validate that the currently selected model exists in the list
+      // Validate that the currently selected model exists in the visible list
       if (selectedModel) {
-        const modelExists = modelList.some(m => m.name === selectedModel)
+        const modelExists = visibleModels.some(m => m.name === selectedModel)
         if (!modelExists) {
-          // Selected model doesn't exist anymore, clear it
+          // Selected model doesn't exist in visible models or is hidden, clear it
           setSelectedModel('')
           saveLocal('selectedModel', '')
         }
       }
       
-      // Auto-select first model if none selected and models are available
-      if (modelList.length > 0 && !selectedModel) {
-        setSelectedModel(modelList[0].name)
+      // Auto-select first model if none selected and visible models are available
+      if (visibleModels.length > 0 && !selectedModel) {
+        setSelectedModel(visibleModels[0].name)
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
@@ -211,6 +221,11 @@ export function useProviders() {
   const updateProvider = useCallback((config: ProviderConfig) => {
     setProviders(prev => 
       prev.map(p => p.type === config.type ? config : p)
+    )
+    
+    // Also update selectedProvider if it's the same provider
+    setSelectedProvider(prev => 
+      prev && prev.type === config.type ? config : prev
     )
   }, [])
 

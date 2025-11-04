@@ -2,7 +2,7 @@
 @import "katex/dist/katex.min.css";
 
 @theme {
-  /* ChatGPT-style colors */
+  /* Dark Mode (Default) */
   --color-sidebar: #1B1B1C;
   --color-main: #151517;
   --color-background: #151517;
@@ -24,7 +24,54 @@
   --color-border: #2A2A2C;
   --color-input: #2A2A2C;
   --color-ring: #FFFFFF;
+  --color-user-bubble: #2F2F2F;
+  --color-user-bubble-text: #ECECEC;
+  --color-input-container: #2C2C2E;
+  --color-input-border: #2C2C2E;
+  --color-send-button: #FFFFFF;
+  --color-send-button-disabled: #1A1A1C;
+  --color-send-button-icon: #000000;
+  --color-icon-muted: #8E8E93;
+  --color-icon-disabled: #565656;
+  --color-dropdown-bg: #2C2C2E;
+  --color-dropdown-border: #3A3A3C;
   --radius: 0.5rem;
+}
+
+/* Light Mode */
+[data-theme="light"] {
+  --color-sidebar: #F7F7F8;
+  --color-main: #FFFFFF;
+  --color-background: #FFFFFF;
+  --color-foreground: #0D0D0D;
+  --color-card: #F7F7F8;
+  --color-card-foreground: #0D0D0D;
+  --color-popover: #FFFFFF;
+  --color-popover-foreground: #0D0D0D;
+  --color-primary: #0D0D0D;
+  --color-primary-foreground: #FFFFFF;
+  --color-secondary: #F0F0F0;
+  --color-secondary-foreground: #0D0D0D;
+  --color-muted: #F0F0F0;
+  --color-muted-foreground: #6B6B6B;
+  --color-accent: #F0F0F0;
+  --color-accent-foreground: #0D0D0D;
+  --color-destructive: #DC2626;
+  --color-destructive-foreground: #FFFFFF;
+  --color-border: #E5E5E5;
+  --color-input: #F0F0F0;
+  --color-ring: #0D0D0D;
+  --color-user-bubble: #F0F0F0;
+  --color-user-bubble-text: #0D0D0D;
+  --color-input-container: #FFFFFF;
+  --color-input-border: #D1D1D6;
+  --color-send-button: #0D0D0D;
+  --color-send-button-disabled: #E5E5E5;
+  --color-send-button-icon: #FFFFFF;
+  --color-icon-muted: #6B6B6B;
+  --color-icon-disabled: #AEAEB2;
+  --color-dropdown-bg: #FFFFFF;
+  --color-dropdown-border: #D1D1D6;
 }
 
 * {
@@ -48,12 +95,12 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background-color: color-mix(in oklch, var(--color-muted-foreground) 20%, transparent);
+  background-color: var(--color-muted);
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background-color: color-mix(in oklch, var(--color-muted-foreground) 30%, transparent);
+  background-color: var(--color-muted-foreground);
 }
 
 /* Markdown styling */
@@ -157,7 +204,7 @@ body {
   
   /* Inline code */
   :not(pre) > code {
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--color-muted);
     padding: 0.2em 0.4em;
     border-radius: 3px;
     color: var(--color-foreground);
@@ -177,10 +224,10 @@ body {
   
   /* Blockquotes */
   blockquote {
-    border-left: 4px solid rgba(255, 255, 255, 0.3);
+    border-left: 4px solid var(--color-border);
     padding-left: 1em;
     margin: 1em 0;
-    color: rgba(255, 255, 255, 0.7);
+    color: var(--color-muted-foreground);
   }
   
   blockquote > p:first-child {
@@ -201,11 +248,11 @@ body {
   }
   
   thead {
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--color-muted);
   }
   
   th, td {
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    border: 1px solid var(--color-border);
     padding: 0.75em 1em;
     text-align: left;
   }
@@ -216,8 +263,12 @@ body {
   
   /* Links */
   a {
-    color: #58a6ff;
+    color: #2563eb;
     text-decoration: none;
+  }
+  
+  [data-theme="dark"] a {
+    color: #58a6ff;
   }
   
   a:hover {
@@ -227,7 +278,7 @@ body {
   /* Horizontal rules */
   hr {
     border: none;
-    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-top: 1px solid var(--color-border);
     margin: 2em 0;
   }
   
@@ -298,6 +349,50 @@ body {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border-width: 0;
+}
+
+/* Input icon button hover effects */
+.input-icon-button:hover:not(:disabled) {
+  background-color: var(--color-icon-hover) !important;
+}
+
+[data-theme="light"] .input-icon-button:hover:not(:disabled) {
+  background-color: rgba(0, 0, 0, 0.05) !important;
+}
+
+[data-theme="dark"] .input-icon-button:hover:not(:disabled) {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Keep active state for enabled buttons */
+.input-icon-button:hover:not(:disabled)[style*="rgba(59, 130, 246"] {
+  background-color: rgba(59, 130, 246, 0.15) !important;
+}
+
+/* Global hover effect that adapts to theme */
+[data-theme="light"] .hover\:bg-white\/10:hover {
+  background-color: rgba(0, 0, 0, 0.05) !important;
+}
+
+[data-theme="dark"] .hover\:bg-white\/10:hover {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Hover effect for accent backgrounds */
+[data-theme="light"] .hover\:bg-accent:hover {
+  background-color: rgba(0, 0, 0, 0.03) !important;
+}
+
+/* Hover effect for white/5 backgrounds */
+[data-theme="light"] .hover\:bg-white\/5:hover,
+[data-theme="light"] .bg-white\/5:hover {
+  background-color: rgba(0, 0, 0, 0.03) !important;
+}
+
+/* Hover effect for white/20 backgrounds */
+[data-theme="light"] .hover\:bg-white\/20:hover,
+[data-theme="light"] .bg-white\/20:hover {
+  background-color: rgba(0, 0, 0, 0.08) !important;
 }
 
 /* Custom Range Slider Styles for better visibility */
