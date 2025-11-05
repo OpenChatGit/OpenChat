@@ -4,6 +4,7 @@ import { ChatArea } from './components/ChatArea'
 import { SettingsModal } from './components/SettingsModal'
 import { UpdateModal } from './components/UpdateModal'
 import { PersonaSidebar } from './components/PersonaSidebar'
+import { SystemPromptModal } from './components/SystemPromptModal'
 import { useChatWithTools } from './hooks/useChatWithTools'
 import { useProviders } from './hooks/useProviders'
 import { usePlugins } from './hooks/usePlugins'
@@ -17,6 +18,7 @@ function App() {
   const [showUpdateModal, setShowUpdateModal] = useState(false)
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
   const [isPersonaSidebarOpen, setIsPersonaSidebarOpen] = useState(false)
+  const [showSystemPromptModal, setShowSystemPromptModal] = useState(false)
   
   const { 
     pluginManager, 
@@ -55,6 +57,8 @@ function App() {
     personaEnabled,
     updatePersona,
     getSourceRegistry,
+    globalSystemPrompt,
+    updateGlobalSystemPrompt,
   } = useChatWithTools(pluginManager)
 
   const {
@@ -200,6 +204,7 @@ function App() {
           onTogglePersonaSidebar={togglePersonaSidebar}
           personaEnabled={personaEnabled}
           getSourceRegistry={getSourceRegistry}
+          onToggleSystemPromptModal={() => setShowSystemPromptModal(true)}
         />
       </div>
 
@@ -249,6 +254,14 @@ function App() {
           // Use callback form to ensure we get the latest state
           updatePersona(personaPrompt, enabled)
         }}
+      />
+
+      {/* System Prompt Modal */}
+      <SystemPromptModal
+        isOpen={showSystemPromptModal}
+        onClose={() => setShowSystemPromptModal(false)}
+        currentPrompt={globalSystemPrompt}
+        onSave={updateGlobalSystemPrompt}
       />
     </div>
   )

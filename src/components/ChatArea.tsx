@@ -27,6 +27,7 @@ interface ChatAreaProps {
   onTogglePersonaSidebar?: () => void
   personaEnabled?: boolean
   getSourceRegistry: () => SourceRegistry
+  onToggleSystemPromptModal?: () => void
 }
 
 export function ChatArea({ 
@@ -48,7 +49,8 @@ export function ChatArea({
   onToggleAutoSearch = () => {},
   onTogglePersonaSidebar,
   personaEnabled = false,
-  getSourceRegistry
+  getSourceRegistry,
+  onToggleSystemPromptModal
 }: ChatAreaProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const [modelCapabilities, setModelCapabilities] = useState<ModelInfo['capabilities']>()
@@ -97,42 +99,60 @@ export function ChatArea({
       {/* Messages */}
       <div className="flex-1 overflow-y-auto relative">
         {/* Floating Toolbar Area */}
-        {session && (
-          <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
-            {/* Plugin hooks: Add toolbar buttons */}
-            <PluginHookRenderer hookType="ui.toolbar" />
-            
-            {/* Floating Persona Button */}
-            {onTogglePersonaSidebar && (
-              <button
-                onClick={onTogglePersonaSidebar}
-                className={`relative p-2 rounded-lg transition-all duration-200 hover:scale-105 shadow-lg ${
-                  personaEnabled ? 'ring-2 ring-green-400/30' : ''
-                }`}
-                style={{
-                  backgroundColor: personaEnabled ? 'var(--color-accent)' : 'var(--color-sidebar)',
-                  color: personaEnabled ? 'white' : 'var(--color-foreground)',
-                  opacity: personaEnabled ? 1 : 0.8
-                }}
-                title={personaEnabled ? "Persona Active - Click to configure" : "Persona Settings"}
-                aria-label="Persona Settings"
-              >
-                <User size={20} />
-                {personaEnabled && (
-                  <>
-                    <span 
-                      className="absolute top-0.5 right-0.5 w-2.5 h-2.5 rounded-full bg-green-400 border-2 border-white shadow-sm animate-pulse"
-                    />
-                    {/* Subtle glow effect */}
-                    <span 
-                      className="absolute top-0.5 right-0.5 w-2.5 h-2.5 rounded-full bg-green-400 blur-sm opacity-50"
-                    />
-                  </>
-                )}
-              </button>
-            )}
-          </div>
-        )}
+        <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
+          {/* Plugin hooks: Add toolbar buttons */}
+          {session && <PluginHookRenderer hookType="ui.toolbar" />}
+          
+          {/* Global System Prompt Button - Always visible */}
+          {onToggleSystemPromptModal && (
+            <button
+              onClick={onToggleSystemPromptModal}
+              className="p-2 rounded-lg transition-all duration-200 hover:scale-105 shadow-lg"
+              style={{
+                backgroundColor: 'var(--color-sidebar)',
+                color: 'var(--color-foreground)',
+                opacity: 0.8
+              }}
+              title="Global System Prompt Settings"
+              aria-label="Global System Prompt Settings"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+                <circle cx="12" cy="12" r="3"/>
+              </svg>
+            </button>
+          )}
+          
+          {/* Floating Persona Button - Only visible when session exists */}
+          {session && onTogglePersonaSidebar && (
+            <button
+              onClick={onTogglePersonaSidebar}
+              className={`relative p-2 rounded-lg transition-all duration-200 hover:scale-105 shadow-lg ${
+                personaEnabled ? 'ring-2 ring-green-400/30' : ''
+              }`}
+              style={{
+                backgroundColor: personaEnabled ? 'var(--color-accent)' : 'var(--color-sidebar)',
+                color: personaEnabled ? 'white' : 'var(--color-foreground)',
+                opacity: personaEnabled ? 1 : 0.8
+              }}
+              title={personaEnabled ? "Persona Active - Click to configure" : "Persona Settings"}
+              aria-label="Persona Settings"
+            >
+              <User size={20} />
+              {personaEnabled && (
+                <>
+                  <span 
+                    className="absolute top-0.5 right-0.5 w-2.5 h-2.5 rounded-full bg-green-400 border-2 border-white shadow-sm animate-pulse"
+                  />
+                  {/* Subtle glow effect */}
+                  <span 
+                    className="absolute top-0.5 right-0.5 w-2.5 h-2.5 rounded-full bg-green-400 blur-sm opacity-50"
+                  />
+                </>
+              )}
+            </button>
+          )}
+        </div>
         {session.messages.length === 0 ? (
           <div className="flex-1"></div>
         ) : (

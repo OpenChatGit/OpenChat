@@ -14,9 +14,28 @@ import { loadWebSearchSettings, saveWebSearchSettings } from '../lib/web-search/
 import { Tokenizer } from '../lib/tokenizer'
 import { debugPersonaState, logPersonaDebug, isPersonaDebugEnabled } from '../lib/personaDebug'
 
-// Global system prompt constant
-// This can be customized in the future to allow user-defined global prompts
-const GLOBAL_SYSTEM_PROMPT = "You are a helpful AI assistant."
+// Default system prompt constant
+const DEFAULT_SYSTEM_PROMPT = "You are a helpful AI assistant."
+
+// Load global system prompt from localStorage or use default
+const loadGlobalSystemPrompt = (): string => {
+  try {
+    const saved = localStorage.getItem('global-system-prompt')
+    return saved || DEFAULT_SYSTEM_PROMPT
+  } catch (error) {
+    console.error('Failed to load global system prompt from localStorage:', error)
+    return DEFAULT_SYSTEM_PROMPT
+  }
+}
+
+// Save global system prompt to localStorage
+const saveGlobalSystemPrompt = (prompt: string): void => {
+  try {
+    localStorage.setItem('global-system-prompt', prompt)
+  } catch (error) {
+    console.error('Failed to save global system prompt to localStorage:', error)
+  }
+}
 
 export function useChatWithTools(pluginManager: PluginManager) {
   // Load sessions from localStorage on initial mount
@@ -58,6 +77,9 @@ export function useChatWithTools(pluginManager: PluginManager) {
   // Persona state management
   const [personaPrompt, setPersonaPrompt] = useState<string>('')
   const [personaEnabled, setPersonaEnabled] = useState<boolean>(false)
+
+  // Global system prompt state management
+  const [globalSystemPrompt, setGlobalSystemPrompt] = useState<string>(() => loadGlobalSystemPrompt())
 
   const streamingContentRef = useRef<string>('')
   const toolExecutor = useRef(new ToolExecutor(pluginManager))
@@ -253,6 +275,12 @@ export function useChatWithTools(pluginManager: PluginManager) {
 
     // Combine with clear separation
     return `${globalPrompt}\n\n--- Persona Instructions ---\n${personaPrompt}`
+  }, [])
+
+  const updateGlobalSystemPrompt = useCallback((prompt: string) => {
+    setGlobalSystemPrompt(prompt)
+    saveGlobalSystemPrompt(prompt)
+    console.log('[useChatWithTools] Global system prompt updated')
   }, [])
 
   const updateSessionTitle = useCallback((sessionId: string, title: string) => {
@@ -911,7 +939,7 @@ Format: {title}Your Summary{/title}`
       const sessionPersonaEnabled = session.personaEnabled || false
 
       const combinedSystemPrompt = combineSystemPrompts(
-        GLOBAL_SYSTEM_PROMPT,
+        globalSystemPrompt,
         sessionPersonaPrompt,
         sessionPersonaEnabled
       )
@@ -1244,5 +1272,7 @@ Format: {title}Your Summary{/title}`
     personaEnabled,
     updatePersona,
     getSourceRegistry,
+    globalSystemPrompt,
+    updateGlobalSystemPrompt,
   }
 }

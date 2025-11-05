@@ -60,11 +60,11 @@ export function ProfileButton({ onOpenSettings }: ProfileButtonProps) {
           className="absolute bottom-full left-0 mb-2 w-56 rounded-lg shadow-lg border overflow-hidden"
           style={{
             backgroundColor: 'var(--color-sidebar)',
-            borderColor: 'rgba(255, 255, 255, 0.1)'
+            borderColor: 'var(--color-dropdown-border)'
           }}
         >
           {/* User Info Section */}
-          <div className="px-4 py-3 border-b" style={{ borderColor: 'rgba(255, 255, 255, 0.1)' }}>
+          <div className="px-4 py-3 border-b" style={{ borderColor: 'var(--color-dropdown-border)' }}>
             <div className="flex items-center gap-3">
               <div
                 className="w-10 h-10 rounded-full flex items-center justify-center"

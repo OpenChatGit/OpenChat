@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Theme Persistence Test</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #fff;
+        }
+        .container {
+            background: #2a2a2a;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #4ade80;
+            margin-top: 0;
+        }
+        button {
+            background: #4ade80;
+            color: #000;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        button:hover {
+            background: #22c55e;
+        }
+        .info {
+            background: #1e3a8a;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 20px 0;
+            border-left: 4px solid #3b82f6;
+        }
+        .result {
+            background: #3a3a3a;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 20px 0;
+            font-family: monospace;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎨 Theme Persistence Test</h1>
+        
+        <div class="info">
+            <strong>Test Instructions:</strong><br>
+            1. Check current theme in localStorage<br>
+            2. Set theme to light or dark<br>
+            3. Reload the page to verify persistence
+        </div>
+
+        <div>
+            <button onclick="checkTheme()">Check Current Theme</button>
+            <button onclick="setTheme('light')">Set Light Theme</button>
+            <button onclick="setTheme('dark')">Set Dark Theme</button>
+            <button onclick="clearTheme()">Clear Theme</button>
+        </div>
+
+        <div class="result" id="result">
+            Click a button to test...
+        </div>
+    </div>
+
+    <script>
+        function checkTheme() {
+            const theme = localStorage.getItem('theme');
+            const parsed = theme ? JSON.parse(theme) : null;
+            
+            let html = '<strong>Current Theme in localStorage:</strong><br>';
+            if (parsed) {
+                html += `Theme: ${parsed}<br>`;
+                html += `Raw value: ${theme}<br>`;
+            } else {
+                html += 'No theme set (will default to dark)<br>';
+            }
+            
+            document.getElementById('result').innerHTML = html;
+        }
+
+        function setTheme(theme) {
+            localStorage.setItem('theme', JSON.stringify(theme));
+            document.getElementById('result').innerHTML = 
+                `<strong>✅ Theme set to: ${theme}</strong><br>` +
+                `Reload the page to verify persistence.`;
+        }
+
+        function clearTheme() {
+            localStorage.removeItem('theme');
+            document.getElementById('result').innerHTML = 
+                '<strong>🗑️ Theme cleared</strong><br>' +
+                'Will default to dark on next load.';
+        }
+
+        // Auto-check on load
+        checkTheme();
+    </script>
+</body>
+</html>

@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "sync-version": "node scripts/sync-version.js",
+    "version": "npm run sync-version && git add -A"
   },
   "dependencies": {
     "@anthropic-ai/tokenizer": "^0.0.4",

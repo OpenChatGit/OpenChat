@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.5.8] - 2025-01-23
 
 ### Added
+- **Global System Prompt Editor** - Configure AI behavior globally across all chats
+  - Always-visible settings button in chat toolbar (next to persona button)
+  - Modal editor with save/reset functionality
+  - Persistent storage in localStorage
+  - Combines with per-session persona prompts
+- **Dynamic Version Management** - Improved version detection and synchronization
+  - Version now dynamically loaded from Tauri API in production
+  - Automatic version sync script (`npm run sync-version`)
+  - Consistent versioning across package.json, Cargo.toml, and tauri.conf.json
+  - Dev builds now correctly show current version (0.5.8)
 - **OpenRouter Provider Integration** - Full support for OpenRouter API with 100+ models
   - Access to models from Anthropic, OpenAI, Google, Meta, Mistral, and more
   - Model filtering and search capabilities for managing large model lists
@@ -28,6 +38,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Moved provider configuration to dedicated "Providers" sidebar section
   - Individual tabs for each provider (Ollama, LM Studio, OpenAI, Anthropic, OpenRouter)
   - Improved provider information display with setup instructions
+
+### Changed
+- System prompt is now stored globally and loaded dynamically
+- Update checker now uses Tauri's getVersion() API for accurate version detection
+- Version synchronization improved across all configuration files
 - **Enhanced Ollama Documentation**
   - Added Windows app setup instructions
   - Network exposure configuration guide
