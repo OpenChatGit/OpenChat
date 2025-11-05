@@ -24,10 +24,9 @@ interface ChatAreaProps {
   isLoadingModels?: boolean
   autoSearchEnabled?: boolean
   onToggleAutoSearch?: () => void
-  onTogglePersonaSidebar?: () => void
   personaEnabled?: boolean
   getSourceRegistry: () => SourceRegistry
-  onToggleSystemPromptModal?: () => void
+  onTogglePromptSettings?: () => void
 }
 
 export function ChatArea({ 
@@ -47,10 +46,9 @@ export function ChatArea({
   isLoadingModels = false,
   autoSearchEnabled = false,
   onToggleAutoSearch = () => {},
-  onTogglePersonaSidebar,
   personaEnabled = false,
   getSourceRegistry,
-  onToggleSystemPromptModal
+  onTogglePromptSettings
 }: ChatAreaProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const [modelCapabilities, setModelCapabilities] = useState<ModelInfo['capabilities']>()
@@ -103,30 +101,10 @@ export function ChatArea({
           {/* Plugin hooks: Add toolbar buttons */}
           {session && <PluginHookRenderer hookType="ui.toolbar" />}
           
-          {/* Global System Prompt Button - Always visible */}
-          {onToggleSystemPromptModal && (
+          {/* Unified Prompt Settings Button - Always visible */}
+          {onTogglePromptSettings && (
             <button
-              onClick={onToggleSystemPromptModal}
-              className="p-2 rounded-lg transition-all duration-200 hover:scale-105 shadow-lg"
-              style={{
-                backgroundColor: 'var(--color-sidebar)',
-                color: 'var(--color-foreground)',
-                opacity: 0.8
-              }}
-              title="Global System Prompt Settings"
-              aria-label="Global System Prompt Settings"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
-                <circle cx="12" cy="12" r="3"/>
-              </svg>
-            </button>
-          )}
-          
-          {/* Floating Persona Button - Only visible when session exists */}
-          {session && onTogglePersonaSidebar && (
-            <button
-              onClick={onTogglePersonaSidebar}
+              onClick={onTogglePromptSettings}
               className={`relative p-2 rounded-lg transition-all duration-200 hover:scale-105 shadow-lg ${
                 personaEnabled ? 'ring-2 ring-green-400/30' : ''
               }`}
@@ -135,8 +113,8 @@ export function ChatArea({
                 color: personaEnabled ? 'white' : 'var(--color-foreground)',
                 opacity: personaEnabled ? 1 : 0.8
               }}
-              title={personaEnabled ? "Persona Active - Click to configure" : "Persona Settings"}
-              aria-label="Persona Settings"
+              title={personaEnabled ? "Persona Active - Click to configure prompts" : "Prompt Settings (Persona & System)"}
+              aria-label="Prompt Settings"
             >
               <User size={20} />
               {personaEnabled && (
