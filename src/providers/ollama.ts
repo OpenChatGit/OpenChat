@@ -43,26 +43,33 @@ export class OllamaProvider extends BaseProvider {
     const url = `${this.config.baseUrl}/api/chat`
     
     // Convert messages to Ollama format with images
-    const formattedMessages = request.messages.map(msg => {
-      // Check if message has images (from extended Message type)
-      const messageWithImages = msg as any
-      if (messageWithImages.images && messageWithImages.images.length > 0) {
-        // Ollama expects images as an array of base64 strings
-        const images = messageWithImages.images.map((img: any) => img.data)
+    const formattedMessages = request.messages
+      .filter(msg => msg.content && msg.content.trim().length > 0) // Filter out empty messages
+      .map(msg => {
+        // Check if message has images (from extended Message type)
+        const messageWithImages = msg as any
+        if (messageWithImages.images && messageWithImages.images.length > 0) {
+          // Ollama expects images as an array of base64 strings
+          const images = messageWithImages.images.map((img: any) => img.data)
+          
+          return {
+            role: msg.role,
+            content: msg.content,
+            images
+          }
+        }
         
+        // Regular text-only message
         return {
           role: msg.role,
-          content: msg.content,
-          images
+          content: msg.content
         }
-      }
-      
-      // Regular text-only message
-      return {
-        role: msg.role,
-        content: msg.content
-      }
-    })
+      })
+    
+    // Validate that we have at least one message
+    if (formattedMessages.length === 0) {
+      throw new Error('No valid messages to send to Ollama')
+    }
     
     const body = {
       model: request.model,
@@ -89,7 +96,22 @@ export class OllamaProvider extends BaseProvider {
       )
 
       if (!response.ok) {
-        throw new Error(`Ollama request failed: ${response.statusText}`)
+        let errorDetails = response.statusText
+        try {
+          const errorData = await response.json()
+          errorDetails = errorData.error || errorData.message || errorDetails
+        } catch {
+          // If we can't parse the error, use statusText
+        }
+        console.error('[Ollama] Request failed:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorDetails,
+          url,
+          model: request.model,
+          messageCount: request.messages.length
+        })
+        throw new Error(`Ollama request failed: ${errorDetails}`)
       }
 
       const data = await response.json()
@@ -120,7 +142,22 @@ export class OllamaProvider extends BaseProvider {
     )
 
     if (!response.ok) {
-      throw new Error(`Ollama request failed: ${response.statusText}`)
+      let errorDetails = response.statusText
+      try {
+        const errorData = await response.json()
+        errorDetails = errorData.error || errorData.message || errorDetails
+      } catch {
+        // If we can't parse the error, use statusText
+      }
+      console.error('[Ollama] Streaming request failed:', {
+        status: response.status,
+        statusText: response.statusText,
+        error: errorDetails,
+        url,
+        model: request.model,
+        messageCount: request.messages.length
+      })
+      throw new Error(`Ollama request failed: ${errorDetails}`)
     }
 
     const reader = response.body?.getReader()

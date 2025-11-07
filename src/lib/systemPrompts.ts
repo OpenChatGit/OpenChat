@@ -105,18 +105,18 @@ Sources:
 function getBaseSystemPrompt(): string {
   // Get current date information
   const now = new Date()
-  const dateString = now.toLocaleDateString('en-US', { 
-    weekday: 'long', 
-    year: 'numeric', 
-    month: 'long', 
-    day: 'numeric' 
+  const dateString = now.toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
   })
-  const timeString = now.toLocaleTimeString('en-US', { 
-    hour: '2-digit', 
+  const timeString = now.toLocaleTimeString('en-US', {
+    hour: '2-digit',
     minute: '2-digit',
     hour12: false
   })
-  
+
   return `You are a helpful AI assistant. Provide accurate, concise, and well-structured responses.
 
 **Current Date and Time:**
@@ -145,20 +145,20 @@ function getBaseSystemPrompt(): string {
  */
 function formatToolDefinition(tool: ToolDefinition): string {
   const func = tool.function
-  
+
   let formatted = `### ${func.name}\n`
   formatted += `**Description**: ${func.description}\n\n`
   formatted += `**Parameters**:\n`
-  
+
   for (const [paramName, paramDef] of Object.entries(func.parameters.properties)) {
     const required = func.parameters.required.includes(paramName) ? '(required)' : '(optional)'
     formatted += `- \`${paramName}\` ${required}: ${paramDef.description}\n`
-    
+
     if (paramDef.enum) {
       formatted += `  - Allowed values: ${paramDef.enum.join(', ')}\n`
     }
   }
-  
+
   return formatted
 }
 
@@ -169,7 +169,7 @@ export function createToolResultMessage(toolCallId: string, result: string, erro
   if (error) {
     return `Tool execution failed (ID: ${toolCallId}): ${error}`
   }
-  
+
   return `Tool execution result (ID: ${toolCallId}):\n\n${result}`
 }
 
@@ -180,12 +180,12 @@ export function parseToolCalls(content: string): any[] | null {
   try {
     // Try to extract JSON from code blocks
     const jsonMatch = content.match(/```json\s*(\{[\s\S]*?\})\s*```/)
-    
+
     if (jsonMatch) {
       const parsed = JSON.parse(jsonMatch[1])
       return parsed.tool_calls || null
     }
-    
+
     // Try to parse the entire content as JSON
     const parsed = JSON.parse(content)
     return parsed.tool_calls || null
