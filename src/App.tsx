@@ -243,8 +243,7 @@ function App() {
         onClose={() => setShowPromptSettingsModal(false)}
         personaPrompt={personaPrompt}
         personaEnabled={personaEnabled}
-        onPersonaPromptChange={(prompt) => updatePersona(prompt, personaEnabled)}
-        onPersonaEnabledChange={(enabled) => updatePersona(personaPrompt, enabled)}
+        onUpdatePersona={updatePersona}
         globalSystemPrompt={globalSystemPrompt}
         onGlobalSystemPromptChange={updateGlobalSystemPrompt}
       />

@@ -8,8 +8,7 @@ interface PromptSettingsModalProps {
   // Persona props
   personaPrompt: string
   personaEnabled: boolean
-  onPersonaPromptChange: (prompt: string) => void
-  onPersonaEnabledChange: (enabled: boolean) => void
+  onUpdatePersona: (prompt: string, enabled: boolean) => void
   // Global system prompt props
   globalSystemPrompt: string
   onGlobalSystemPromptChange: (prompt: string) => void
@@ -24,8 +23,7 @@ export function PromptSettingsModal({
   onClose,
   personaPrompt,
   personaEnabled,
-  onPersonaPromptChange,
-  onPersonaEnabledChange,
+  onUpdatePersona,
   globalSystemPrompt,
   onGlobalSystemPromptChange,
 }: PromptSettingsModalProps) {
@@ -73,8 +71,8 @@ export function PromptSettingsModal({
   }
 
   const handleSave = () => {
-    onPersonaPromptChange(localPersonaPrompt)
-    onPersonaEnabledChange(localPersonaEnabled)
+    // Update persona with both values at once to avoid race conditions
+    onUpdatePersona(localPersonaPrompt, localPersonaEnabled)
     onGlobalSystemPromptChange(localGlobalPrompt)
     setHasChanges(false)
     onClose()

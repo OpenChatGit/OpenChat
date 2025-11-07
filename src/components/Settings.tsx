@@ -1,9 +1,9 @@
-import { Sun, Moon } from 'lucide-react'
+import { Sun, Moon, Monitor } from 'lucide-react'
 import { useTheme } from '../hooks/useTheme'
 import { Button } from './ui/Button'
 
 export function Settings() {
-  const { theme, toggleTheme } = useTheme()
+  const { theme, effectiveTheme, setTheme } = useTheme()
 
   return (
     <div className="space-y-6">
@@ -23,14 +23,24 @@ export function Settings() {
             <div>
               <p className="font-medium mb-1">Theme</p>
               <p className="text-sm text-muted-foreground">
-                Choose between light and dark mode
+                Choose your preferred color scheme
+                {theme === 'system' && ` (currently ${effectiveTheme})`}
               </p>
             </div>
             <div className="flex gap-2">
               <Button
+                variant={theme === 'system' ? 'default' : 'secondary'}
+                size="sm"
+                onClick={() => setTheme('system')}
+                className="flex items-center gap-2"
+              >
+                <Monitor className="w-4 h-4" />
+                System
+              </Button>
+              <Button
                 variant={theme === 'light' ? 'default' : 'secondary'}
                 size="sm"
-                onClick={() => theme === 'dark' && toggleTheme()}
+                onClick={() => setTheme('light')}
                 className="flex items-center gap-2"
               >
                 <Sun className="w-4 h-4" />
@@ -39,7 +49,7 @@ export function Settings() {
               <Button
                 variant={theme === 'dark' ? 'default' : 'secondary'}
                 size="sm"
-                onClick={() => theme === 'light' && toggleTheme()}
+                onClick={() => setTheme('dark')}
                 className="flex items-center gap-2"
               >
                 <Moon className="w-4 h-4" />
